@@ -1,0 +1,15 @@
+menu "PrusaCam byClaude (bring-up)"
+    comment "Only for development: values are copied to NVS on first boot if NVS is empty."
+
+    config PRUSACAM_DEV_WIFI_SSID
+        string "WiFi SSID"
+        default ""
+
+    config PRUSACAM_DEV_WIFI_PASSWORD
+        string "WiFi password"
+        default ""
+
+    config PRUSACAM_DEV_CONNECT_TOKEN
+        string "PrusaConnect camera token"
+        default ""
+endmenu

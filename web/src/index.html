@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PrusaCam byClaude</title>
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <section id="login" class="login" hidden>
+    <img src="icons/logo.svg" alt="Prusa Connect ESP32 cam">
+    <form id="login-form">
+      <div style="display:flex;flex-direction:column;gap:.6rem">
+        <input name="username" autocomplete="username" placeholder="Usuario" required>
+        <input name="password" type="password" autocomplete="current-password" placeholder="Contraseña" required>
+        <button class="btn" type="submit">Ingresar</button>
+        <div class="error" id="login-error"></div>
+      </div>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <img class="logo" src="icons/logo.svg" alt="Prusa Connect ESP32 cam">
+      <nav>
+        <a href="https://connect.prusa3d.com" target="_blank" rel="noopener">PrusaConnect</a>
+        <a href="https://help.prusa3d.com/guide/esp-camera-for-prusa-connect_390199" target="_blank" rel="noopener">Ayuda</a>
+      </nav>
+      <span class="spacer"></span>
+      <nav class="actions">
+        <button class="link" id="light-toggle" type="button"><img class="icon" id="light-icon" src="icons/light-off-icon.svg" alt=""> Luz</button>
+        <button class="link" id="refresh" type="button"><img class="icon" src="icons/refresh-icon.svg" alt=""> Actualizar</button>
+        <button class="link" id="reboot" type="button"><img class="icon" src="icons/reboot-icon.svg" alt=""> Reiniciar</button>
+        <button class="link" id="logout" type="button">Salir</button>
+      </nav>
+    </header>
+    <hr>
+
+    <main>
+      <section class="hero">
+        <div class="snapshot">
+          <img id="photo" alt="Último snapshot">
+          <div class="caption" id="photo-caption"></div>
+        </div>
+        <div class="side">
+          <p class="lead">PrusaConnect: <span class="state" id="connect-state">…</span></p>
+          <p class="lead">Intervalo: <b id="interval">…</b></p>
+          <p class="lead">Última subida: <b id="last-upload">…</b></p>
+          <button class="btn" id="snap-now" type="button">Tomar y enviar snapshot</button>
+          <a class="btn" id="download" href="api/v1/snapshot.jpg" download="snapshot.jpg"
+             style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Descargar snapshot</a>
+        </div>
+      </section>
+
+      <nav class="tabs" id="tabs">
+        <a href="#camera">Cámara</a>
+        <a href="#connect">PrusaConnect</a>
+        <a href="#network">Red</a>
+        <a href="#system">Sistema</a>
+      </nav>
+      <hr>
+      <section class="panel" id="view" aria-live="polite"></section>
+    </main>
+
+    <footer>
+      <span><b>PrusaCam byClaude</b> <span id="version"></span></span>
+      <span>Basado en Prusa-Firmware-ESP32-Cam de Miroslav Pivovarsky · GPL-3.0</span>
+    </footer>
+  </div>
+</body>
+</html>
