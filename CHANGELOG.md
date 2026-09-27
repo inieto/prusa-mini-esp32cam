@@ -2,7 +2,7 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones según
 [SemVer](https://semver.org/lang/es/). Referencias como B1, S4 o F2 apuntan a los hallazgos sobre
-v1.1.2 en [`../PLAN-firmware.md`](../PLAN-firmware.md).
+v1.1.2 (auditoría todavía no publicada en el repo).
 
 ## [Sin publicar]
 
@@ -20,6 +20,8 @@ v1.1.2 en [`../PLAN-firmware.md`](../PLAN-firmware.md).
 - El intervalo de fotos se toma del que se elige en la web de PrusaConnect (`trigger_scheme`).
 - AP de configuración `PrusaCam-XXXX` en 192.168.4.1 con clave única por dispositivo (B12, S2).
 - Núcleo portable con 46 tests en la Mac (GoogleTest + AddressSanitizer/UBSan).
+- `AGENTS.md` (y `CLAUDE.md` que lo importa) con invariantes de arquitectura, comandos y
+  convenciones para agentes de IA y contribuidores; índice y plantilla de ADRs.
 
 ### Cambiado
 - Reescritura completa sobre ESP-IDF 5.5.5 y C++23, sin Arduino (ADR-0001).

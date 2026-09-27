@@ -6,7 +6,8 @@ v1.1.2, con arquitectura hexagonal, actores y seguridad por defecto.
 
 - Arquitectura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Decisiones: [`docs/adr/`](docs/adr/)
-- Hallazgos sobre v1.1.2 que motivan el diseño: [`../PLAN-firmware.md`](../PLAN-firmware.md)
+- Para agentes de IA y contribuidores: [`AGENTS.md`](AGENTS.md)
+- Hallazgos sobre v1.1.2 que motivan el diseño: auditoría fuera del repo por ahora (IDs B*, S*, F*)
 
 ## Estado
 
