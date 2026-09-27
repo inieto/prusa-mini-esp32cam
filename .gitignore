@@ -4,3 +4,6 @@ firmware/sdkconfig
 firmware/sdkconfig.old
 firmware/managed_components/
 .DS_Store
+
+# Documentos privados (reportes, notas): nunca se suben
+private/
