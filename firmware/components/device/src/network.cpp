@@ -38,8 +38,8 @@ core::Result<void> Network::start(const WifiCredentials& wifi, const std::string
   esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Network::on_event, this);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);  // credentials live in our NVS namespace
 
-  const bool have_sta = !wifi.ssid.empty();
-  if (have_sta) {
+  have_sta_ = !wifi.ssid.empty();
+  if (have_sta_) {
     wifi_config_t sta_cfg = {};
     std::strncpy(reinterpret_cast<char*>(sta_cfg.sta.ssid), wifi.ssid.c_str(),
                  sizeof sta_cfg.sta.ssid);
@@ -67,7 +67,7 @@ core::Result<void> Network::start(const WifiCredentials& wifi, const std::string
     ap_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
     ap_cfg.ap.max_connection = 2;
     ap_cfg.ap.channel = 6;
-    esp_wifi_set_mode(WIFI_MODE_AP);
+    esp_wifi_set_mode(WIFI_MODE_APSTA);  // STA side idle, but able to scan for networks
     esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
     ap_active_ = true;
     ESP_LOGW(kTag, "No WiFi configured. Setup AP '%s', password '%s', http://192.168.4.1",
@@ -93,12 +93,13 @@ void Network::start_services(const std::string& hostname) {
 void Network::on_event(void* arg, esp_event_base_t base, int32_t id, void* data) {
   auto* self = static_cast<Network*>(arg);
   if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
-    esp_wifi_connect();
+    if (self->have_sta_) esp_wifi_connect();
   } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
     const auto* ev = static_cast<wifi_event_sta_disconnected_t*>(data);
     if (self->connected_) ESP_LOGW(kTag, "disconnected (reason %d), reconnecting", ev->reason);
     self->connected_ = false;
-    esp_wifi_connect();  // the driver paces retries; the recovery ladder handles long outages
+    // The driver paces retries; the recovery ladder handles long outages.
+    if (self->have_sta_) esp_wifi_connect();
   } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
     const auto* ev = static_cast<ip_event_got_ip_t*>(data);
     char ip[16];
@@ -143,6 +144,29 @@ std::string Network::mac_string() const {
 void Network::reconnect() {
   ESP_LOGW(kTag, "forcing WiFi reconnection");
   esp_wifi_disconnect();  // STA_DISCONNECTED handler calls esp_wifi_connect()
+}
+
+std::vector<ScanResult> Network::scan() {
+  std::vector<ScanResult> out;
+  if (esp_wifi_scan_start(nullptr, true) != ESP_OK) return out;
+  uint16_t count = 20;
+  wifi_ap_record_t records[20];
+  if (esp_wifi_scan_get_ap_records(&count, records) != ESP_OK) return out;
+  for (uint16_t i = 0; i < count; ++i) {
+    const wifi_ap_record_t& r = records[i];
+    std::string_view auth = "WPA2";
+    switch (r.authmode) {
+      case WIFI_AUTH_OPEN: auth = "abierta"; break;
+      case WIFI_AUTH_WEP: auth = "WEP"; break;
+      case WIFI_AUTH_WPA_PSK: auth = "WPA"; break;
+      case WIFI_AUTH_WPA3_PSK: auth = "WPA3"; break;
+      case WIFI_AUTH_WPA2_WPA3_PSK: auth = "WPA2/WPA3"; break;
+      case WIFI_AUTH_WPA2_ENTERPRISE: auth = "WPA2-Enterprise"; break;
+      default: break;
+    }
+    out.push_back({reinterpret_cast<const char*>(r.ssid), r.rssi, r.primary, auth});
+  }
+  return out;
 }
 
 void EspSystem::reboot(core::RebootReason reason) {

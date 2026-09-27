@@ -35,5 +35,16 @@ add_executable(core_tests ${TEST_SOURCES})
 target_compile_options(core_tests PRIVATE ${WARNINGS})
 target_link_libraries(core_tests PRIVATE core GTest::gtest_main)
 
+# Pack the real UI so the bundle format is tested end to end.
+set(WEB_BUNDLE ${CMAKE_CURRENT_BINARY_DIR}/web_bundle.bin)
+file(GLOB_RECURSE WEB_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../web/src/*)
+add_custom_command(OUTPUT ${WEB_BUNDLE}
+  COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/pack_web.py
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../web/src ${WEB_BUNDLE}
+  DEPENDS ${WEB_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/pack_web.py)
+add_custom_target(web_bundle DEPENDS ${WEB_BUNDLE})
+add_dependencies(core_tests web_bundle)
+target_compile_definitions(core_tests PRIVATE WEB_BUNDLE_PATH="${WEB_BUNDLE}")
+
 include(GoogleTest)
 gtest_discover_tests(core_tests DISCOVERY_MODE PRE_TEST)

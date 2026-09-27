@@ -10,7 +10,9 @@ set(CORE_SOURCES
     src/prusa_connect.cpp
     src/recovery.cpp
     src/scheduler.cpp
+    src/settings_json.cpp
     src/snapshot_service.cpp
+    src/web_bundle.cpp
 )
 
 if(ESP_PLATFORM)

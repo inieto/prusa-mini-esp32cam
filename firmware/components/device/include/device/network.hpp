@@ -6,11 +6,19 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "core/ports.hpp"
 #include "device/settings_store.hpp"
 
 namespace device {
+
+struct ScanResult {
+  std::string ssid;
+  int8_t rssi;
+  uint8_t channel;
+  std::string_view auth;
+};
 
 class Network final : public core::NetworkInfo {
  public:
@@ -24,6 +32,7 @@ class Network final : public core::NetworkInfo {
   core::connect::Mac efuse_mac() const;
 
   void reconnect();  // drop and re-associate (recovery ladder step 2)
+  std::vector<ScanResult> scan();  // blocking, ~2-3 s
 
  private:
   static void on_event(void* arg, esp_event_base_t base, int32_t id, void* data);
@@ -31,6 +40,7 @@ class Network final : public core::NetworkInfo {
 
   std::atomic<bool> connected_{false};
   std::atomic<bool> ap_active_{false};
+  bool have_sta_ = false;
   mutable std::mutex mutex_;
   std::string ip_;
   std::string ssid_;

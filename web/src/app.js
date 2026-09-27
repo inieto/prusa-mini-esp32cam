@@ -35,7 +35,7 @@ async function api(path, { method = 'GET', body } = {}) {
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) {
+  if (res.status === 401 && path !== 'login' && path !== 'setup') {
     showLogin();
     throw new Unauthorized();
   }
@@ -123,10 +123,8 @@ const FORMS = {
         { key: 'token', label: 'Token de la cámara', type: 'secret', setKey: 'token_set',
           hint: 'En PrusaConnect: Cámaras → Agregar otra cámara → copiar el token' },
         { key: 'fingerprint', label: 'Fingerprint', type: 'text', readonly: true },
-        { key: 'hostname', label: 'Servidor', type: 'text' },
-        { key: 'default_interval_s', label: 'Intervalo por defecto', type: 'select',
-          options: [[10, '10 s'], [30, '30 s'], [60, '60 s']],
-          hint: 'Se reemplaza por el intervalo que elijas en PrusaConnect' },
+        { key: 'hostname', label: 'Servidor', type: 'text',
+          hint: 'El intervalo de fotos se elige en PrusaConnect, en la configuración de la cámara' },
       ]],
     ],
   },
@@ -342,9 +340,19 @@ async function route() {
 }
 
 // ---------- session ----------
-function showLogin() {
+let setupMode = false;
+
+function showLogin(setup = false, windowOpen = true) {
+  setupMode = setup;
   $('#app').hidden = true;
   $('#login').hidden = false;
+  $('#setup-hint').hidden = !setup;
+  $('#login-submit').textContent = setup ? 'Crear usuario' : 'Ingresar';
+  $('#login-form [name=password]').autocomplete = setup ? 'new-password' : 'current-password';
+  $('#login-submit').disabled = setup && !windowOpen;
+  $('#login-error').textContent = setup && !windowOpen
+    ? 'Por seguridad, el usuario inicial solo se puede crear en los primeros 15 minutos tras encender la cámara. Reiniciala y volvé a intentar.'
+    : '';
 }
 
 function showApp() {
@@ -358,7 +366,7 @@ $('#login-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const form = new FormData(ev.target);
   try {
-    await api('login', { method: 'POST', body: Object.fromEntries(form) });
+    await api(setupMode ? 'setup' : 'login', { method: 'POST', body: Object.fromEntries(form) });
     $('#login-error').textContent = '';
     showApp();
   } catch (e) {
@@ -398,4 +406,13 @@ $('#photo').addEventListener('click', () => window.open(`${API}/snapshot.jpg`, '
 window.addEventListener('hashchange', route);
 
 setInterval(() => { if (!$('#app').hidden) refreshStatus(); }, 5000);
-showApp();
+
+(async () => {
+  try {
+    const session = await api('session');
+    if (session.authenticated) showApp();
+    else showLogin(session.setup_required, session.setup_window_open);
+  } catch {
+    showLogin();
+  }
+})();

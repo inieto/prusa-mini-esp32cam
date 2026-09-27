@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Serves web/src with a fake /api/v1 so the UI can be developed without the camera.
 
-Usage: python3 tools/mock_server.py [port]   (login: admin / admin)
+Usage: python3 tools/mock_server.py [port]
+First load asks to create a user, like a fresh device.
 """
 import json
 import sys
@@ -17,6 +18,7 @@ STARTED = time.time()
 
 state = {
     "session": None,
+    "user": None,  # first run: the UI must create it (set MOCK_USER=1 env to skip)
     "light": False,
     "camera": {
         "resolution": "svga", "jpeg_quality": 12, "rotation": 0, "hmirror": False, "vflip": False,
@@ -25,7 +27,7 @@ state = {
         "manual_gain": 0, "auto_white_balance": True, "lens_correction": True,
         "flash_on_capture": False, "flash_lead_ms": 200, "flash_duty_pct": 80,
     },
-    "connect": {"token_set": True, "hostname": "connect.prusa3d.com", "default_interval_s": 30,
+    "connect": {"token_set": True, "hostname": "connect.prusa3d.com",
                 "fingerprint": "MjQ4MTc5MTgzMTY4NjkxMzIgMDA6MDA6MDA6MDA6MDA6MDA="},
     "network": {"ssid": "nietogiardinieri", "password_set": True, "hostname": "prusa-esp32cam"},
     "seq": 1,
@@ -36,6 +38,11 @@ state = {
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB), **kwargs)
+
+    def end_headers(self):
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-store")  # always serve the latest UI while developing
+        super().end_headers()
 
     def log_message(self, fmt, *args):
         sys.stderr.write("mock: " + fmt % args + "\n")
@@ -61,13 +68,26 @@ class Handler(SimpleHTTPRequestHandler):
 
     def api(self, method):
         path = self.path.split("?")[0][len("/api/v1/"):]
+        cookie = {"Set-Cookie": "sid=mock; HttpOnly; SameSite=Strict; Path=/"}
+        if path == "session":
+            return self.send_json({"authenticated": self.authed(),
+                                   "setup_required": state["user"] is None,
+                                   "setup_window_open": True})
+        if path == "setup" and method == "POST":
+            body = self.read_json()
+            if state["user"] is not None:
+                return self.send_json({"error": "configuración inicial cerrada"}, HTTPStatus.UNAUTHORIZED)
+            if len(body.get("password", "")) < 8:
+                return self.send_json({"error": "mínimo 8 caracteres"}, HTTPStatus.BAD_REQUEST)
+            state["user"] = (body["username"], body["password"])
+            state["session"] = "mock"
+            return self.send_json({"ok": True}, headers=cookie)
         if path == "login" and method == "POST":
             body = self.read_json()
-            if body.get("username") == "admin" and body.get("password") == "admin":
+            if state["user"] == (body.get("username"), body.get("password")):
                 state["session"] = "mock"
-                return self.send_json({"ok": True}, headers={
-                    "Set-Cookie": "sid=mock; HttpOnly; SameSite=Strict; Path=/"})
-            return self.send_json({"error": "bad credentials"}, HTTPStatus.UNAUTHORIZED)
+                return self.send_json({"ok": True}, headers=cookie)
+            return self.send_json({"error": "usuario o contraseña incorrectos"}, HTTPStatus.UNAUTHORIZED)
         if not self.authed():
             return self.send_json({"error": "login required"}, HTTPStatus.UNAUTHORIZED)
 
@@ -137,5 +157,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
-    print(f"PrusaCam mock UI on http://localhost:{port}  (admin / admin)")
+    print(f"PrusaCam mock UI on http://localhost:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

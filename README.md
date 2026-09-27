@@ -12,11 +12,21 @@ v1.1.2, con arquitectura hexagonal, actores y seguridad por defecto.
 
 | Corte | Estado |
 |---|---|
-| Núcleo portable (políticas, protocolo PrusaConnect, EXIF, FramePool) + 41 tests en host | ✅ |
+| Núcleo portable (políticas, protocolo PrusaConnect, EXIF, FramePool, JSON, bundle UI) + 46 tests en host | ✅ |
 | Adaptadores ESP-IDF: cámara, cliente PrusaConnect, WiFi/AP/mDNS/SNTP, NVS | ✅ compila, sin probar en hardware |
-| UI web con estética Prusa (contra servidor mock) | ✅ |
-| Servidor HTTP en el dispositivo (login, API REST, UI embebida) | ⏳ siguiente |
-| OTA con rollback, coredump por API, logs en SD, timelapse, PrusaLink | ⏳ |
+| Servidor HTTP: login (PBKDF2 + cookie), API REST `/api/v1`, UI embebida gzip (18 KB) | ✅ compila, sin probar en hardware |
+| Diagnóstico: log en RAM visible en la web, historial de reinicios con uptime previo | ✅ compila, sin probar en hardware |
+| UI web con estética Prusa (validada contra el servidor mock) | ✅ |
+| OTA por web con rollback, coredump por API, logs en SD, timelapse, PrusaLink | ⏳ |
+
+## Primer uso
+
+1. Sin WiFi configurado, la cámara levanta el AP `PrusaCam-XXXX` en `http://192.168.4.1`. La
+   clave es única por dispositivo y se imprime en el log serie al arrancar.
+2. No hay contraseña de fábrica: al abrir la web se crea el usuario. Por seguridad, eso solo se
+   puede hacer **durante los primeros 15 minutos** después de encender (si pasa el tiempo,
+   reiniciá la cámara).
+3. En la pestaña *PrusaConnect* se carga el token; el intervalo se elige en la web de PrusaConnect.
 
 ## Requisitos
 
@@ -48,7 +58,7 @@ mismo token PrusaConnect sigue reconociendo la cámara.
 ## UI sin hardware
 
 ```sh
-python3 tools/mock_server.py 8080   # http://localhost:8080  (admin / admin)
+python3 tools/mock_server.py 8080   # http://localhost:8080 (primero pide crear usuario)
 ```
 
 ## Licencia

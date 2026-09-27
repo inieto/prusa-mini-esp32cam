@@ -11,11 +11,12 @@
 <body>
   <section id="login" class="login" hidden>
     <img src="icons/logo.svg" alt="Prusa Connect ESP32 cam">
+    <p class="lead" id="setup-hint" hidden>Primera vez: creá el usuario para administrar la cámara.</p>
     <form id="login-form">
       <div style="display:flex;flex-direction:column;gap:.6rem">
         <input name="username" autocomplete="username" placeholder="Usuario" required>
-        <input name="password" type="password" autocomplete="current-password" placeholder="Contraseña" required>
-        <button class="btn" type="submit">Ingresar</button>
+        <input name="password" type="password" autocomplete="current-password" placeholder="Contraseña" required minlength="8">
+        <button class="btn" type="submit" id="login-submit">Ingresar</button>
         <div class="error" id="login-error"></div>
       </div>
     </form>
