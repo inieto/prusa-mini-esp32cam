@@ -2,8 +2,8 @@
 
 Firmware nuevo para **ESP32-CAM AI Thinker (ESP32-D0WDQ6 + OV2640 + 4 MB PSRAM + 4 MB flash)**
 cuyo objetivo principal es publicar snapshots en **PrusaConnect** de forma confiable, segura y
-observable. Reemplaza a Prusa-Firmware-ESP32-Cam v1.1.2; ver `../PLAN-firmware.md` para los
-hallazgos que motivan cada decisión (IDs S*, B*, F*).
+observable. Reemplaza a Prusa-Firmware-ESP32-Cam v1.1.2; los IDs S*, B*, F*
+remiten a los hallazgos de una auditoría de ese firmware (todavía no publicada en el repo).
 
 ## 1. Objetivos y no-objetivos
 
