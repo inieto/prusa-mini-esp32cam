@@ -26,7 +26,7 @@ class EspCamera final : public core::CameraPort {
   core::Resolution max_resolution() const { return max_resolution_; }
   bool supports(core::Resolution r) const { return r <= max_resolution_; }
 
-  core::Result<core::FrameRef> capture() override;
+  core::Result<core::FrameRef> capture(core::CaptureKind kind = core::CaptureKind::Snapshot) override;
   core::Result<void> apply(const core::CameraSettings& settings) override;
   core::CameraSettings settings() const override;
 

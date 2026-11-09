@@ -254,6 +254,7 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
   }
   if (get && route == "status") return get_status(req);
   if (get && route == "snapshot.jpg") return get_snapshot(req);
+  if (get && route == "stream") return d_.stream.serve(req);
   if (get && route == "logs") {
     const std::string logs = log_snapshot();
     httpd_resp_set_type(req, "text/plain; charset=utf-8");

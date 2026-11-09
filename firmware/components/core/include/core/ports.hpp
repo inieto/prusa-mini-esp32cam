@@ -11,9 +11,13 @@
 
 namespace core {
 
+// Preview frames feed the live stream: never fire the flash (5 fps of LED pulses with lead
+// time would be useless and blinding).
+enum class CaptureKind : uint8_t { Snapshot, Preview };
+
 struct CameraPort {
   virtual ~CameraPort() = default;
-  virtual Result<FrameRef> capture() = 0;
+  virtual Result<FrameRef> capture(CaptureKind kind = CaptureKind::Snapshot) = 0;
   virtual Result<void> apply(const CameraSettings& settings) = 0;
   virtual CameraSettings settings() const = 0;
 };

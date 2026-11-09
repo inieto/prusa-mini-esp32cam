@@ -122,6 +122,20 @@ class Handler(SimpleHTTPRequestHandler):
                 "resets": [{"reason": "power-on", "uptime_s": 0},
                            {"reason": "connectivity lost", "uptime_s": 7200}],
             })
+        if path == "stream":
+            data = SAMPLE.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "multipart/x-mixed-replace;boundary=prusacamframe")
+            self.end_headers()
+            try:
+                for _ in range(600):  # ~2 min at 5 fps
+                    self.wfile.write(b"--prusacamframe\r\nContent-Type: image/jpeg\r\n"
+                                     + f"Content-Length: {len(data)}\r\n\r\n".encode() + data + b"\r\n")
+                    self.wfile.flush()
+                    time.sleep(0.2)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return None
         if path == "snapshot.jpg":
             data = SAMPLE.read_bytes()
             self.send_response(200)

@@ -195,7 +195,7 @@ void EspCamera::set_light(bool on) {
   set_led_duty(on ? duty : 0);
 }
 
-core::Result<core::FrameRef> EspCamera::capture() {
+core::Result<core::FrameRef> EspCamera::capture(core::CaptureKind kind) {
   std::optional<core::CameraSettings> pending;
   {
     std::lock_guard lock(mutex_);
@@ -210,7 +210,7 @@ core::Result<core::FrameRef> EspCamera::capture() {
   std::optional<core::FrameWriter> writer = pool_->acquire();
   if (!writer) return core::fail(core::Errc::Busy);  // every slot is being read
 
-  const bool flash = s.flash_on_capture && !light_on_;
+  const bool flash = s.flash_on_capture && !light_on_ && kind == core::CaptureKind::Snapshot;
   if (flash) {
     set_led_duty(s.flash_duty_pct);
     vTaskDelay(pdMS_TO_TICKS(s.flash_lead_ms));

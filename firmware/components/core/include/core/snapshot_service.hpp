@@ -79,6 +79,11 @@ class SnapshotService {
   // Drive from the owning task roughly once per second.
   void tick();
 
+  // Owning task only, while someone watches the live stream: a flash-less capture that becomes
+  // the latest frame (web UI, stream) without uploads or observers. Errors are not counted:
+  // a busy pool just means the stream skips a frame.
+  void capture_preview();
+
   // Thread-safe requests.
   void request_snapshot() { snapshot_requested_ = true; }
   void request_info_sync() { info_requested_ = true; }

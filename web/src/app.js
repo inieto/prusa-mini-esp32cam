@@ -512,6 +512,18 @@ async function renderSystem() {
 
 // ---------- status header ----------
 let lightOn = false;
+let liveOn = false;
+
+// Live view swaps the snapshot for the MJPEG stream (one viewer at a time on the camera).
+function setLive(on) {
+  liveOn = on;
+  const photo = $('#photo');
+  $('#live').textContent = on ? 'Stop live view' : 'Live view';
+  $('#photo-caption').textContent = on ? 'Live · up to 5 fps, stops after 30 min' : '';
+  delete photo.dataset.seq;
+  photo.src = on ? `${API}/stream?t=${Date.now()}` : `${API}/snapshot.jpg?t=${Date.now()}`;
+  if (!on) refreshStatus();
+}
 
 async function refreshStatus() {
   try {
@@ -534,7 +546,7 @@ async function refreshStatus() {
     lightOn = !!s.light;
     $('#light-icon').src = lightOn ? 'icons/light-on-icon.svg' : 'icons/light-off-icon.svg';
     const photo = $('#photo');
-    if (s.connect.frame_seq !== undefined && photo.dataset.seq !== String(s.connect.frame_seq)) {
+    if (!liveOn && s.connect.frame_seq !== undefined && photo.dataset.seq !== String(s.connect.frame_seq)) {
       photo.dataset.seq = s.connect.frame_seq;
       photo.src = `${API}/snapshot.jpg?seq=${s.connect.frame_seq}`;
       $('#photo-caption').textContent = `Captured ${ago(s.connect.frame_age_s)}`;
@@ -642,6 +654,15 @@ $('#reboot').addEventListener('click', () => {
 });
 $('#logout').addEventListener('click', async () => { await action('logout'); showLogin(); });
 $('#photo').addEventListener('click', () => window.open(`${API}/snapshot.jpg`, '_blank'));
+$('#photo').addEventListener('error', () => {
+  if (liveOn) {
+    toast('Live view unavailable (another viewer, or the camera is busy)', true);
+    setLive(false);
+  }
+});
+$('#live').addEventListener('click', () => setLive(!liveOn));
+// Leaving the page or hiding the tab frees the single stream slot on the camera.
+document.addEventListener('visibilitychange', () => { if (document.hidden && liveOn) setLive(false); });
 window.addEventListener('hashchange', route);
 
 setInterval(() => { if (!$('#app').hidden) refreshStatus(); }, 5000);

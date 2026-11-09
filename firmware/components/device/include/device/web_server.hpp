@@ -11,6 +11,7 @@
 #include "device/auth.hpp"
 #include "device/camera.hpp"
 #include "device/connect_client.hpp"
+#include "device/live_stream.hpp"
 #include "device/network.hpp"
 #include "device/settings_store.hpp"
 #include "device/storage.hpp"
@@ -30,6 +31,7 @@ class WebServer {
     Storage& storage;
     PrinterMonitor& printer;
     MqttBridge& mqtt;
+    LiveStream& stream;
     Network& network;
     core::SystemControl& system;
     Auth& auth;

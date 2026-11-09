@@ -18,6 +18,7 @@
 #include "device/diagnostics.hpp"
 #include "device/factory_reset.hpp"
 #include "device/firmware.hpp"
+#include "device/live_stream.hpp"
 #include "device/log.hpp"
 #include "device/mqtt_bridge.hpp"
 #include "device/network.hpp"
@@ -29,7 +30,10 @@
 namespace {
 
 constexpr const char* kTag = "main";
-constexpr size_t kFrameSlots = 3;
+// One slot is always the latest frame; the others cover an upload, the live stream and the
+// timelapse/MQTT hand-overs. QXGA frames only fit three times next to the driver's buffers.
+constexpr size_t kMaxFrameSlots = 4;
+constexpr core::Millis kPreviewPeriod{200};  // live view: 5 fps at most
 constexpr uint32_t kServiceStack = 10 * 1024;  // TLS handshake runs on this task
 constexpr core::Millis kHealthyAfter{60'000};    // confirm OTA image after this uptime
 
@@ -61,8 +65,10 @@ void seed_dev_settings(device::WifiCredentials& wifi, device::ConnectCredentials
 core::FramePool* make_frame_pool(core::Resolution largest) {
   // Sized for the sensor's largest resolution so resolution changes never need reallocation.
   const size_t slot = core::max_jpeg_size(largest);
-  static std::array<std::span<uint8_t>, kFrameSlots> buffers;
-  for (auto& b : buffers) {
+  const size_t count = largest > core::Resolution::UXGA ? kMaxFrameSlots - 1 : kMaxFrameSlots;
+  static std::array<std::span<uint8_t>, kMaxFrameSlots> buffers;
+  for (size_t i = 0; i < count; ++i) {
+    auto& b = buffers[i];
     auto* mem = static_cast<uint8_t*>(heap_caps_malloc(slot, MALLOC_CAP_SPIRAM));
     if (!mem) {
       ESP_LOGE(kTag, "PSRAM allocation for frame pool failed");
@@ -70,17 +76,34 @@ core::FramePool* make_frame_pool(core::Resolution largest) {
     }
     b = {mem, slot};
   }
-  static core::FramePool pool{buffers};
+  static core::FramePool pool{std::span<const std::span<uint8_t>>(buffers.data(), count)};
+  ESP_LOGI(kTag, "frame pool: %u slots of %u KB", static_cast<unsigned>(count),
+           static_cast<unsigned>(slot / 1024));
   return &pool;
 }
 
+struct CaptureTask {
+  core::SnapshotService& service;
+  device::LiveStream& stream;
+};
+
+// The only task that touches the camera (ADR-0003): the scheduled tick every second, plus
+// flash-less preview frames while someone watches the live stream.
 void service_task(void* arg) {
-  auto& service = *static_cast<core::SnapshotService*>(arg);
+  auto& ctx = *static_cast<CaptureTask*>(arg);
   esp_task_wdt_add(nullptr);
   bool confirmed = false;
-  TickType_t last = xTaskGetTickCount();
+  core::Millis last_tick = g_clock.now() - core::Millis{1000};
+  core::Millis last_preview{0};
   for (;;) {
-    service.tick();
+    const core::Millis now = g_clock.now();
+    if (now - last_tick >= core::Millis{1000}) {
+      last_tick = now;
+      ctx.service.tick();
+    } else if (ctx.stream.watching() && now - last_preview >= kPreviewPeriod) {
+      last_preview = now;
+      ctx.service.capture_preview();
+    }
     esp_task_wdt_reset();
     device::note_uptime(static_cast<uint32_t>(g_clock.now().count() / 1000));
     // A fresh update proves itself by running for a minute with the network up (or with no
@@ -90,7 +113,7 @@ void service_task(void* arg) {
       device::confirm_firmware();
       confirmed = true;
     }
-    vTaskDelayUntil(&last, pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(ctx.stream.watching() ? 20 : 100));
   }
 }
 
@@ -160,11 +183,14 @@ extern "C" void app_main() {
               .firmware = app->version});
   service.add_observer(mqtt);
 
-  xTaskCreatePinnedToCore(service_task, "snapshot", kServiceStack, &service, 5, nullptr, 1);
+  static device::LiveStream stream{service};
+  stream.start();
+  static CaptureTask capture_task{service, stream};
+  xTaskCreatePinnedToCore(service_task, "snapshot", kServiceStack, &capture_task, 5, nullptr, 1);
 
   const core::Result<core::WebBundle> bundle = core::WebBundle::parse(device::embedded_web_bundle());
   if (!bundle) ESP_LOGE(kTag, "embedded web UI is corrupt");
-  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer, mqtt,
+  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer, mqtt, stream,
                                 g_network, g_system, g_auth, g_clock,
                                 bundle.value_or(core::WebBundle{}), app->version}};
   if (auto r = web.start(); !r) ESP_LOGE(kTag, "HTTP server failed to start");

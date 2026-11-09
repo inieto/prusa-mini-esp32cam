@@ -32,8 +32,9 @@ struct FakeCamera : core::CameraPort {
   core::CameraSettings current{};
   std::deque<core::Error> failures;  // consumed before producing frames
   uint32_t captures = 0;
-
-  core::Result<core::FrameRef> capture() override {
+  uint32_t previews = 0;
+  core::Result<core::FrameRef> capture(core::CaptureKind kind) override {
+    if (kind == core::CaptureKind::Preview) ++previews;
     ++captures;
     if (!failures.empty()) {
       auto e = failures.front();

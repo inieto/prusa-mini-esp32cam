@@ -84,6 +84,23 @@ TEST_F(SnapshotServiceTest, UploadsOnlyWhilePrintingWithoutTriggeringRecovery) {
   EXPECT_FALSE(s.status().uploads_paused);
 }
 
+TEST_F(SnapshotServiceTest, PreviewsUpdateTheLatestFrameWithoutUploadsOrObservers) {
+  struct Counter : core::FrameObserver {
+    uint32_t frames = 0;
+    void on_frame(const core::FrameRef&) override { ++frames; }
+  } counter;
+  auto s = make({.default_interval = 30 * kSec});
+  s.add_observer(counter);
+  run(s, 1 * kSec);  // first scheduled capture
+  const uint32_t uploads = connect.uploads;
+  for (int i = 0; i < 10; ++i) s.capture_preview();
+  EXPECT_EQ(camera.previews, 10u);
+  EXPECT_EQ(connect.uploads, uploads);
+  EXPECT_EQ(counter.frames, 1u);
+  EXPECT_EQ(s.status().capture_failures, 0u);
+  ASSERT_TRUE(s.latest_frame());
+}
+
 TEST_F(SnapshotServiceTest, FollowsTriggerSchemeFromPrusaConnect) {
   connect.info_results.push_back(std::string(R"({"config":{"trigger_scheme":"TEN_SEC"}})"));
   auto s = make({.default_interval = 60 * kSec});

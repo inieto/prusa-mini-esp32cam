@@ -52,6 +52,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - MQTT / Home Assistant (*MQTT* tab): the camera shows up through MQTT discovery with a camera
   entity fed by every snapshot, a light switch, a snapshot button and sensors for PrusaConnect,
   the printer, WiFi signal and uploads (ADR-0013).
+- Live view: an MJPEG stream (up to 5 fps, one viewer) from the *Live view* button, served
+  without blocking the rest of the web UI. Live frames never fire the flash or get uploaded
+  (ADR-0014).
 - `tools/soak.py`: long-running reliability check against a real camera (upload success
   rate, reboots, RSSI, minimum heap) with a PASS/FAIL verdict.
 - Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
@@ -80,4 +83,3 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Pending
 - 48 h soak against PrusaConnect on hardware.
-- MJPEG stream.
