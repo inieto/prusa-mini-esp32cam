@@ -161,6 +161,21 @@ const FORMS = {
       ]],
     ],
   },
+  mqtt: {
+    title: 'MQTT',
+    endpoint: 'config/mqtt',
+    sections: [
+      ['MQTT / Home Assistant', [
+        { key: 'connected', label: 'Status', type: 'text', readonly: true, format: (v) => (v ? 'connected' : 'not connected') },
+        { key: 'uri', label: 'Broker', type: 'text',
+          hint: 'mqtt://192.168.0.10:1883 (plain MQTT on your network). Empty disables it. Home Assistant finds the camera by itself (MQTT discovery).' },
+        { key: 'user', label: 'User', type: 'text' },
+        { key: 'password', label: 'Password', type: 'secret', setKey: 'password_set' },
+        { key: 'publish_images', label: 'Publish snapshots', type: 'switch',
+          hint: 'Each capture goes to prusacam/<name>/image, shown as a camera entity' },
+      ]],
+    ],
+  },
   storage: {
     title: 'Storage',
     endpoint: 'config/storage',
@@ -228,7 +243,8 @@ function fieldControl(field, values, onChange) {
       return [input, eye];
     }
     default: {
-      const input = h('input', { type: 'text', value: value ?? '', readOnly: !!field.readonly,
+      const shown = field.format ? field.format(value) : value;
+      const input = h('input', { type: 'text', value: shown ?? '', readOnly: !!field.readonly,
                                  id: `f-${field.key}` });
       input.addEventListener('change', () => onChange(input.value));
       return input;
@@ -531,7 +547,7 @@ async function refreshStatus() {
 // ---------- routing ----------
 const ROUTES = { camera: () => renderForm('camera'), connect: () => renderForm('connect'),
                  network: () => renderForm('network'), printer: () => renderForm('printer'),
-                 storage: () => renderForm('storage'),
+                 storage: () => renderForm('storage'), mqtt: () => renderForm('mqtt'),
                  system: renderSystem };
 
 async function route() {

@@ -49,6 +49,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
   shows the printer state, progress and file, records the timelapse per print and can upload to
   PrusaConnect only while printing (and 5 min after). An unreachable printer never stops the
   uploads (ADR-0012).
+- MQTT / Home Assistant (*MQTT* tab): the camera shows up through MQTT discovery with a camera
+  entity fed by every snapshot, a light switch, a snapshot button and sensors for PrusaConnect,
+  the printer, WiFi signal and uploads (ADR-0013).
 - `tools/soak.py`: long-running reliability check against a real camera (upload success
   rate, reboots, RSSI, minimum heap) with a PASS/FAIL verdict.
 - Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
@@ -77,4 +80,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Pending
 - 48 h soak against PrusaConnect on hardware.
-- MQTT/Home Assistant, MJPEG stream.
+- MJPEG stream.

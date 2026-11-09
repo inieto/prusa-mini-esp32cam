@@ -8,6 +8,7 @@
 #include "core/camera_settings.hpp"
 #include "core/storage_policy.hpp"
 #include "device/connect_client.hpp"
+#include "device/mqtt_bridge.hpp"
 #include "device/printer_monitor.hpp"
 
 namespace device {
@@ -30,6 +31,9 @@ class SettingsStore {
 
   core::CameraSettings load_camera() const;
   core::Result<void> save_camera(const core::CameraSettings& camera);
+
+  MqttSettings load_mqtt() const;
+  core::Result<void> save_mqtt(const MqttSettings& mqtt);
 
   PrinterSettings load_printer() const;
   core::Result<void> save_printer(const PrinterSettings& printer);

@@ -263,6 +263,7 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
   if (get && route == "wifi/scan") return wifi_scan(req);
   if ((get || put) && route == "config/storage") return storage_config(req, put);
   if ((get || put) && route == "config/printer") return printer_config(req, put);
+  if ((get || put) && route == "config/mqtt") return mqtt_config(req, put);
   if (get && route == "sd") return sd_status(req);
   if (get && route == "sd/list") return sd_list(req);
   if (get && route == "sd/file") return sd_file(req);
@@ -669,6 +670,42 @@ esp_err_t WebServer::printer_config(httpd_req_t* req, bool update) {
   cJSON_AddStringToObject(j.get(), "user", p.user.c_str());
   cJSON_AddBoolToObject(j.get(), "password_set", !p.password.empty());  // never echo it
   cJSON_AddBoolToObject(j.get(), "upload_only_while_printing", p.upload_only_while_printing);
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::mqtt_config(httpd_req_t* req, bool update) {
+  MqttSettings m = d_.mqtt.settings();
+  if (update) {
+    const auto body = read_json_body(req);
+    if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
+    JsonPtr j(cJSON_ParseWithLength(body->data(), body->size()));
+    if (!j || !cJSON_IsObject(j.get())) return send_error(req, "400 Bad Request", "invalid JSON");
+    bool has_uri = false, has_user = false, has_pass = false;
+    const std::string uri = json_string(j.get(), "uri", &has_uri);
+    const std::string user = json_string(j.get(), "user", &has_user);
+    const std::string pass = json_string(j.get(), "password", &has_pass);
+    if (has_uri && !uri.empty() && !MqttBridge::valid_uri(uri)) {
+      return send_error(req, "400 Bad Request", "broker must look like mqtt://host:1883 (no TLS)");
+    }
+    if ((has_user && user.size() > 64) || (has_pass && pass.size() > 64)) {
+      return send_error(req, "400 Bad Request", "user or password too long");
+    }
+    if (has_uri) m.uri = uri;
+    if (has_user) m.user = user;
+    if (has_pass) m.password = pass;
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(j.get(), "publish_images")) {
+      if (!cJSON_IsBool(v)) return send_error(req, "400 Bad Request", "invalid value");
+      m.publish_images = cJSON_IsTrue(v);
+    }
+    if (auto r = d_.store.save_mqtt(m); !r) return send_error(req, "500 Internal Server Error", "could not save");
+    d_.mqtt.set_settings(m);
+  }
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddStringToObject(j.get(), "uri", m.uri.c_str());
+  cJSON_AddStringToObject(j.get(), "user", m.user.c_str());
+  cJSON_AddBoolToObject(j.get(), "password_set", !m.password.empty());
+  cJSON_AddBoolToObject(j.get(), "publish_images", m.publish_images);
+  cJSON_AddBoolToObject(j.get(), "connected", d_.mqtt.connected());
   return send_json(req, "200 OK", print(j.get()));
 }
 

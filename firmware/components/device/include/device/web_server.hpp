@@ -29,6 +29,7 @@ class WebServer {
     SettingsStore& store;
     Storage& storage;
     PrinterMonitor& printer;
+    MqttBridge& mqtt;
     Network& network;
     core::SystemControl& system;
     Auth& auth;
@@ -57,6 +58,7 @@ class WebServer {
   esp_err_t get_coredump(httpd_req_t* req);
   esp_err_t storage_config(httpd_req_t* req, bool update);
   esp_err_t printer_config(httpd_req_t* req, bool update);
+  esp_err_t mqtt_config(httpd_req_t* req, bool update);
   esp_err_t sd_status(httpd_req_t* req);
   esp_err_t sd_list(httpd_req_t* req);
   esp_err_t sd_file(httpd_req_t* req);

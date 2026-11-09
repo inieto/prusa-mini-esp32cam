@@ -2,11 +2,11 @@
 # may include ESP-IDF headers.
 idf_component_register(
   SRCS src/auth.cpp src/camera.cpp src/clocks.cpp src/connect_client.cpp src/diagnostics.cpp
-       src/factory_reset.cpp src/firmware.cpp src/log.cpp src/network.cpp src/printer_monitor.cpp src/settings_store.cpp src/storage.cpp
+       src/factory_reset.cpp src/firmware.cpp src/log.cpp src/mqtt_bridge.cpp src/network.cpp src/printer_monitor.cpp src/settings_store.cpp src/storage.cpp
        src/web_server.cpp
   INCLUDE_DIRS include
   REQUIRES core app_update bootloader_support espcoredump esp_partition esp_app_format esp_driver_gpio esp_driver_ledc esp_http_client esp_http_server esp_netif
-           esp_wifi esp_timer esp_driver_sdmmc fatfs sdmmc vfs json mbedtls nvs_flash esp32-camera mdns)
+           esp_wifi esp_timer esp_driver_sdmmc fatfs sdmmc vfs json mqtt mbedtls nvs_flash esp32-camera mdns)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
 
 # The web UI (web/src) is packed into one gzip bundle at build time and embedded in flash.

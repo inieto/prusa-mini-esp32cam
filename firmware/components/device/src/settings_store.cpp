@@ -128,6 +128,25 @@ core::Result<void> SettingsStore::save_camera(const core::CameraSettings& camera
   return nvs.commit();
 }
 
+MqttSettings SettingsStore::load_mqtt() const {
+  Nvs nvs("mqtt", NVS_READONLY);
+  MqttSettings m;
+  m.uri = nvs.str("uri");
+  m.user = nvs.str("user");
+  m.password = nvs.str("pass");
+  m.publish_images = nvs.str("images", "1") == "1";
+  return m;
+}
+
+core::Result<void> SettingsStore::save_mqtt(const MqttSettings& m) {
+  Nvs nvs("mqtt", NVS_READWRITE);
+  nvs.set("uri", m.uri);
+  nvs.set("user", m.user);
+  nvs.set("pass", m.password);
+  nvs.set("images", m.publish_images ? "1" : "0");
+  return nvs.commit();
+}
+
 PrinterSettings SettingsStore::load_printer() const {
   Nvs nvs("link", NVS_READONLY);
   PrinterSettings p;

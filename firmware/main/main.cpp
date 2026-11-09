@@ -19,6 +19,7 @@
 #include "device/factory_reset.hpp"
 #include "device/firmware.hpp"
 #include "device/log.hpp"
+#include "device/mqtt_bridge.hpp"
 #include "device/network.hpp"
 #include "device/printer_monitor.hpp"
 #include "device/settings_store.hpp"
@@ -151,11 +152,19 @@ extern "C" void app_main() {
   g_storage.start(g_store.load_storage(), &g_printer);
   service.add_observer(g_storage);
 
+  static device::MqttBridge mqtt{{service, camera, g_network, g_printer}};
+  mqtt.start(g_store.load_mqtt(),
+             {.node_id = core::mqtt::node_id_from_mac(g_network.mac_string()),
+              .name = wifi.hostname,
+              .base = "prusacam/" + wifi.hostname,
+              .firmware = app->version});
+  service.add_observer(mqtt);
+
   xTaskCreatePinnedToCore(service_task, "snapshot", kServiceStack, &service, 5, nullptr, 1);
 
   const core::Result<core::WebBundle> bundle = core::WebBundle::parse(device::embedded_web_bundle());
   if (!bundle) ESP_LOGE(kTag, "embedded web UI is corrupt");
-  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer,
+  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer, mqtt,
                                 g_network, g_system, g_auth, g_clock,
                                 bundle.value_or(core::WebBundle{}), app->version}};
   if (auto r = web.start(); !r) ESP_LOGE(kTag, "HTTP server failed to start");

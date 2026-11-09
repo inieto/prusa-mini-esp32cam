@@ -37,6 +37,8 @@ state = {
                  "reason": "LoadProhibited"},  # set to None to simulate a clean device
     "printer": {"host": "192.168.0.50", "user": "maker", "password_set": True,
                 "upload_only_while_printing": True},
+    "mqtt": {"uri": "mqtt://192.168.0.10:1883", "user": "ha", "password_set": True,
+             "publish_images": True, "connected": True},
     "storage": {"log_to_sd": True, "timelapse": "printing", "timelapse_interval_s": 60},
     "sd": {  # fake card: folders are dicts, files are sizes
         "logs": {"2026-11-08.log": 18_200, "2026-11-09.log": 4_096},
