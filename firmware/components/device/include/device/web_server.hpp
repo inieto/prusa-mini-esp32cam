@@ -50,6 +50,8 @@ class WebServer {
   esp_err_t connect_config(httpd_req_t* req, bool update);
   esp_err_t network_config(httpd_req_t* req, bool update);
   esp_err_t wifi_scan(httpd_req_t* req);
+  esp_err_t ota_upload(httpd_req_t* req);
+  esp_err_t get_coredump(httpd_req_t* req);
 
   bool is_authenticated(httpd_req_t* req) const;
 

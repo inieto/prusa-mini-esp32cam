@@ -303,9 +303,74 @@ function confirmButton(label, armedLabel, onConfirm) {
   return b;
 }
 
+// Waits for the camera to come back after a reboot, then reloads the page.
+function reloadWhenBack(timeoutMs = 120000) {
+  const until = Date.now() + timeoutMs;
+  const poll = async () => {
+    try {
+      await fetch(`${API}/session`, { cache: 'no-store' }).then((r) => { if (!r.ok) throw r; });
+      location.reload();
+    } catch {
+      if (Date.now() < until) setTimeout(poll, 2000);
+    }
+  };
+  setTimeout(poll, 5000);
+}
+
+function firmwareUpdate() {
+  const file = h('input', { type: 'file', accept: '.bin,application/octet-stream' });
+  const progress = h('progress', { max: 100, value: 0, hidden: true });
+  const button = h('button', { class: 'btn medium', type: 'button', text: 'Upload and install', disabled: true });
+  file.addEventListener('change', () => { button.disabled = !file.files.length; });
+  button.addEventListener('click', () => {
+    const bin = file.files[0];
+    if (!bin) return;
+    button.disabled = true;
+    progress.hidden = false;
+    // XMLHttpRequest instead of fetch: it reports upload progress.
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/ota`);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) progress.value = (100 * e.loaded) / e.total; };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* keep empty */ }
+      if (xhr.status === 200) {
+        toast(`Installed ${data.version}. Rebooting… the page reloads by itself.`);
+        reloadWhenBack();
+      } else {
+        if (xhr.status === 401) showLogin();
+        toast(`Update failed: ${data.error || `HTTP ${xhr.status}`}`, true);
+        button.disabled = false;
+        progress.hidden = true;
+      }
+    };
+    xhr.onerror = () => { toast('Update failed: connection lost', true); button.disabled = false; };
+    xhr.send(bin);
+  });
+  return [file, progress, button];
+}
+
+function coredumpRows(dump) {
+  if (!dump) return [h('label', { class: 'key', text: 'Crash dump' }), h('div', { class: 'value', text: 'none stored' })];
+  return [
+    h('label', { class: 'key', text: 'Crash dump' }),
+    h('div', { class: 'value strong', text: `${dump.reason || 'crash'} · task ${dump.task || '?'} · pc ${dump.pc} · ${Math.round(dump.size / 1024)} KB` }),
+    h('div', { class: 'value', style: 'grid-column:2;gap:.5rem' },
+      h('a', { class: 'btn medium', href: `${API}/coredump`, download: '', text: 'Download',
+               style: 'display:inline-flex;align-items:center;justify-content:center;text-decoration:none' }),
+      confirmButton('Erase dump', 'Click again to erase', async () => {
+        await action('coredump/erase', {}, 'Crash dump erased');
+        route();
+      })),
+    h('div', { class: 'hint', text: 'Decode it with: idf.py coredump-info -c coredump.elf (same build as the one that crashed).' }),
+  ];
+}
+
 async function renderSystem() {
   const view = $('#view');
   const s = await api('status');
+  const fw = s.firmware || {};
   const kv = (label, value) => [h('label', { class: 'key', text: label }), h('div', { class: 'value strong', text: value })];
   const logs = h('pre', { class: 'log', text: 'Loading…' });
   view.replaceChildren(
@@ -322,6 +387,14 @@ async function renderSystem() {
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {}, h('th', { text: 'Reason' }), h('th', { text: 'After' }))),
       h('tbody', {}, (s.resets || []).map((r) => h('tr', {}, h('td', { text: r.reason }), h('td', { text: duration(r.uptime_s) }))))),
+    h('h2', { text: 'Firmware' }),
+    h('div', { class: 'form' },
+      kv('Running', `${s.version} (${fw.partition || '?'})${fw.pending_verify ? ' · on probation: confirms after 1 min online' : ''}`),
+      fw.rolled_back ? kv('Rolled back', `Update ${fw.rolled_back} failed its health check; the previous version was restored.`) : null,
+      h('label', { class: 'key', text: 'Update' }),
+      h('div', { class: 'value', style: 'flex-wrap:wrap;gap:.5rem' }, firmwareUpdate()),
+      h('div', { class: 'hint', text: 'firmware/build/prusacam_byclaude.bin. If the new version does not come online within a minute after rebooting, the previous one is restored on the next reset.' }),
+      coredumpRows(s.coredump)),
     h('h2', { text: 'Maintenance' }),
     h('div', { class: 'form' },
       h('label', { class: 'key', text: 'Factory reset' }),

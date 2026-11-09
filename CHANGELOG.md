@@ -35,6 +35,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Saving the WiFi settings while the camera has no working station (setup or fallback AP)
   reboots it straight away to join the new network.
 - Support for BOYA flash chips found on some AI Thinker clones.
+- Firmware update from the web UI (*System → Firmware*), with upload progress. The image is
+  checked (same project, SHA-256) and installed in the other slot; it must run 60 s with the
+  network up or the previous version comes back on the next reset. A rollback is reported in
+  the UI (ADR-0010).
+- Crash dumps: after a panic the *System* tab shows the task, PC and reason, and the ELF can be
+  downloaded for `idf.py coredump-info` or erased.
 - `tools/soak.py`: long-running reliability check against a real camera (upload success
   rate, reboots, RSSI, minimum heap) with a PASS/FAIL verdict.
 - Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
@@ -63,4 +69,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Pending
 - 48 h soak against PrusaConnect on hardware.
-- OTA via web with rollback, downloadable coredump, logs and timelapse on SD, PrusaLink.
+- Logs and timelapse on SD, PrusaLink, MQTT/Home Assistant, MJPEG stream.

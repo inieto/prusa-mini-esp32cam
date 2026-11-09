@@ -2,7 +2,6 @@
 #include <esp_app_desc.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
-#include <esp_ota_ops.h>
 #include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -18,6 +17,7 @@
 #include "device/connect_client.hpp"
 #include "device/diagnostics.hpp"
 #include "device/factory_reset.hpp"
+#include "device/firmware.hpp"
 #include "device/log.hpp"
 #include "device/network.hpp"
 #include "device/settings_store.hpp"
@@ -78,8 +78,11 @@ void service_task(void* arg) {
     service.tick();
     esp_task_wdt_reset();
     device::note_uptime(static_cast<uint32_t>(g_clock.now().count() / 1000));
-    if (!confirmed && g_clock.now() >= kHealthyAfter) {
-      esp_ota_mark_app_valid_cancel_rollback();  // no-op when not booting a fresh OTA image
+    // A fresh update proves itself by running for a minute with the network up (or with no
+    // WiFi configured at all). Until then any reset, crash or watchdog rolls back (ADR-0010).
+    if (!confirmed && g_clock.now() >= kHealthyAfter &&
+        (g_network.connected() || !g_network.station_configured())) {
+      device::confirm_firmware();
       confirmed = true;
     }
     vTaskDelayUntil(&last, pdMS_TO_TICKS(1000));
@@ -97,6 +100,15 @@ extern "C" void app_main() {
 
   if (auto r = device::SettingsStore::init_flash(); !r) ESP_LOGE(kTag, "NVS init failed");
   device::record_boot(reset_reason);
+  if (const auto fw = device::firmware_status(); fw.rolled_back_version) {
+    ESP_LOGW(kTag, "update %s failed its health check and was rolled back",
+             fw.rolled_back_version->c_str());
+  }
+  if (const auto dump = device::coredump_info()) {
+    ESP_LOGW(kTag, "core dump stored (%u B, task %s, pc 0x%08lx): download it from System",
+             static_cast<unsigned>(dump->size), dump->task.c_str(),
+             static_cast<unsigned long>(dump->pc));
+  }
   device::check_factory_reset_pin(g_system);
   g_auth.load();
 

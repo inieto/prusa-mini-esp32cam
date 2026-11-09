@@ -35,6 +35,7 @@ class Network final : public core::NetworkInfo {
   bool connected() const override { return connected_; }
   core::connect::NetworkSnapshot current() const override;
   bool setup_ap_active() const { return ap_active_; }
+  bool station_configured() const { return have_sta_; }
   int ap_client_count() const;
   std::string mac_string() const;
   core::connect::Mac efuse_mac() const;

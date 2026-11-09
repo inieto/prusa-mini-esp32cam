@@ -6,12 +6,15 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <memory>
+#include <new>
 
 #include "core/settings_json.hpp"
 #include "device/diagnostics.hpp"
 #include "device/factory_reset.hpp"
+#include "device/firmware.hpp"
 
 namespace device {
 namespace {
@@ -74,6 +77,19 @@ std::string json_string(const cJSON* obj, const char* key, bool* present = nullp
   const cJSON* item = cJSON_GetObjectItemCaseSensitive(obj, key);
   if (present) *present = cJSON_IsString(item);
   return cJSON_IsString(item) ? item->valuestring : "";
+}
+
+// Receives exactly out.size() bytes of the body (httpd_req_recv may return less per call).
+bool recv_exact(httpd_req_t* req, std::span<uint8_t> out) {
+  size_t got = 0;
+  int timeouts = 0;
+  while (got < out.size()) {
+    const int n = httpd_req_recv(req, reinterpret_cast<char*>(out.data() + got), out.size() - got);
+    if (n == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 3) continue;
+    if (n <= 0) return false;
+    got += static_cast<size_t>(n);
+  }
+  return true;
 }
 
 bool is_valid_hostname(std::string_view h) {
@@ -224,6 +240,8 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
     return httpd_resp_send(req, logs.data(), static_cast<ssize_t>(logs.size()));
   }
   if (get && route == "wifi/scan") return wifi_scan(req);
+  if (post && route == "ota") return ota_upload(req);
+  if (get && route == "coredump") return get_coredump(req);
   if ((get || put) && route == "config/camera") return camera_config(req, put);
   if ((get || put) && route == "config/connect") return connect_config(req, put);
   if ((get || put) && route == "config/network") return network_config(req, put);
@@ -243,6 +261,10 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
     if (route == "reboot") {
       reboot_later(d_.system);
       return send_json(req, "202 Accepted", R"({"ok":true})");
+    }
+    if (route == "coredump/erase") {
+      erase_coredump();
+      return send_json(req, "200 OK", R"({"ok":true})");
     }
     if (route == "factory-reset") {
       erase_user_config();
@@ -328,6 +350,25 @@ esp_err_t WebServer::get_status(httpd_req_t* req) {
   cJSON_AddNumberToObject(h, "internal_free", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
   cJSON_AddNumberToObject(h, "internal_min", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
   cJSON_AddNumberToObject(h, "psram_free", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+
+  const FirmwareStatus fw = firmware_status();
+  cJSON* f = cJSON_AddObjectToObject(root.get(), "firmware");
+  cJSON_AddStringToObject(f, "partition", fw.running_partition.c_str());
+  cJSON_AddBoolToObject(f, "pending_verify", fw.pending_verify);
+  if (fw.rolled_back_version) cJSON_AddStringToObject(f, "rolled_back", fw.rolled_back_version->c_str());
+  else cJSON_AddNullToObject(f, "rolled_back");
+
+  if (const auto dump = coredump_info()) {
+    cJSON* cd = cJSON_AddObjectToObject(root.get(), "coredump");
+    cJSON_AddNumberToObject(cd, "size", static_cast<double>(dump->size));
+    cJSON_AddStringToObject(cd, "task", dump->task.c_str());
+    char pc[11];
+    std::snprintf(pc, sizeof pc, "0x%08lx", static_cast<unsigned long>(dump->pc));
+    cJSON_AddStringToObject(cd, "pc", pc);
+    cJSON_AddStringToObject(cd, "reason", dump->reason.c_str());
+  } else {
+    cJSON_AddNullToObject(root.get(), "coredump");
+  }
 
   cJSON* resets = cJSON_AddArrayToObject(root.get(), "resets");
   for (const ResetRecord& r : reset_history()) {
@@ -443,6 +484,74 @@ esp_err_t WebServer::network_config(httpd_req_t* req, bool update) {
   cJSON_AddBoolToObject(j.get(), "reboot_required", reboot_required);
   cJSON_AddBoolToObject(j.get(), "rebooting", rebooting);
   return send_json(req, "200 OK", print(j.get()));
+}
+
+// Raw image body (application/octet-stream: like JSON, it forces a CORS preflight, so together
+// with SameSite=Strict no other site can push firmware through a logged-in browser).
+esp_err_t WebServer::ota_upload(httpd_req_t* req) {
+  if (header(req, "Content-Type") != "application/octet-stream") {
+    return send_error(req, "415 Unsupported Media Type", "send the .bin as application/octet-stream");
+  }
+  OtaWriter ota;
+  if (auto r = ota.begin(req->content_len); !r) {
+    return r.error().code == core::Errc::OutOfRange
+               ? send_error(req, "400 Bad Request", "file size does not fit a firmware image")
+               : send_error(req, "500 Internal Server Error", "cannot start the update");
+  }
+  constexpr size_t kChunk = 4096;
+  static_assert(kChunk >= OtaWriter::kHeaderBytes);
+  std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[kChunk]);
+  if (!buffer) return send_error(req, "500 Internal Server Error", "out of memory");
+
+  for (size_t received = 0; received < req->content_len;) {
+    const size_t n = std::min(kChunk, req->content_len - received);
+    if (!recv_exact(req, {buffer.get(), n})) {
+      return send_error(req, "400 Bad Request", "upload interrupted");
+    }
+    if (auto r = ota.write({buffer.get(), n}); !r) {
+      switch (r.error().code) {
+        case core::Errc::Unsupported:
+          return send_error(req, "400 Bad Request", "this is not a PrusaCam byClaude firmware");
+        case core::Errc::InvalidArgument:
+          return send_error(req, "400 Bad Request", "not an ESP32 firmware image");
+        default:
+          return send_error(req, "500 Internal Server Error", "flash write failed");
+      }
+    }
+    received += n;
+  }
+  const core::Result<std::string> version = ota.finish();
+  if (!version) {
+    return send_error(req, "400 Bad Request", "image verification failed (corrupt or truncated)");
+  }
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddBoolToObject(j.get(), "ok", true);
+  cJSON_AddStringToObject(j.get(), "version", version->c_str());
+  reboot_later(d_.system, core::RebootReason::OtaApplied);
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::get_coredump(httpd_req_t* req) {
+  const auto dump = coredump_info();
+  if (!dump) return send_error(req, "404 Not Found", "no core dump stored");
+  httpd_resp_set_type(req, "application/octet-stream");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+  // Must outlive the response (httpd keeps the pointer).
+  const std::string disposition = "attachment; filename=\"coredump-" + d_.version + ".elf\"";
+  httpd_resp_set_hdr(req, "Content-Disposition", disposition.c_str());
+  constexpr size_t kChunk = 4096;
+  std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[kChunk]);
+  if (!buffer) return send_error(req, "500 Internal Server Error", "out of memory");
+  for (size_t offset = 0; offset < dump->size;) {
+    const size_t n = std::min(kChunk, dump->size - offset);
+    if (!read_coredump(offset, {buffer.get(), n})) break;
+    if (httpd_resp_send_chunk(req, reinterpret_cast<const char*>(buffer.get()),
+                              static_cast<ssize_t>(n)) != ESP_OK) {
+      return ESP_FAIL;
+    }
+    offset += n;
+  }
+  return httpd_resp_send_chunk(req, nullptr, 0);
 }
 
 esp_err_t WebServer::wifi_scan(httpd_req_t* req) {

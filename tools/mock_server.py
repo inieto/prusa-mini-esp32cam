@@ -32,6 +32,8 @@ state = {
     "connect": {"token_set": True, "hostname": "connect.prusa3d.com",
                 "fingerprint": "MjQ4MTc5MTgzMTY4NjkxMzIgMDA6MDA6MDA6MDA6MDA6MDA="},
     "network": {"ssid": "nietogiardinieri", "password_set": True, "hostname": "prusa-esp32cam"},
+    "coredump": {"size": 65536 - 4096, "task": "httpd", "pc": "0x400d1234",
+                 "reason": "LoadProhibited"},  # set to None to simulate a clean device
     "seq": 1,
     "uploads_ok": 42,
 }
@@ -102,6 +104,8 @@ class Handler(SimpleHTTPRequestHandler):
                             "last_error": None, "frame_seq": state["seq"], "frame_age_s": 12},
                 "wifi": {"ssid": "nietogiardinieri", "ip": "192.168.0.61", "rssi": -52},
                 "heap": {"internal_free": 101_000, "internal_min": 72_000, "psram_free": 3_100_000},
+                "firmware": {"partition": "ota_0", "pending_verify": False, "rolled_back": None},
+                "coredump": state["coredump"],
                 "resets": [{"reason": "power-on", "uptime_s": 0},
                            {"reason": "connectivity lost", "uptime_s": 7200}],
             })
@@ -143,6 +147,28 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "light" and method == "POST":
             state["light"] = bool(self.read_json().get("on"))
+            return self.send_json({"ok": True})
+        if path == "ota" and method == "POST":
+            if self.headers.get("Content-Type") != "application/octet-stream":
+                return self.send_json({"error": "send the .bin as application/octet-stream"},
+                                      HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
+            length = int(self.headers.get("Content-Length") or 0)
+            data = self.rfile.read(length)
+            if not data or data[0] != 0xE9:  # ESP image magic
+                return self.send_json({"error": "not an ESP32 firmware image"}, HTTPStatus.BAD_REQUEST)
+            return self.send_json({"ok": True, "version": "0.2.0-mock"})
+        if path == "coredump" and method == "GET":
+            if not state["coredump"]:
+                return self.send_json({"error": "no core dump stored"}, HTTPStatus.NOT_FOUND)
+            data = b"\x7fELF" + bytes(state["coredump"]["size"] - 4)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", 'attachment; filename="coredump-0.1.0-mock.elf"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+        if path == "coredump/erase" and method == "POST":
+            state["coredump"] = None
             return self.send_json({"ok": True})
         if path == "factory-reset" and method == "POST":
             state["user"] = None

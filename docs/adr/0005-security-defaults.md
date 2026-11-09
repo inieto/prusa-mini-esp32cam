@@ -1,7 +1,8 @@
 # ADR-0005: Secure by default
 
 - Status: accepted · 2026-09-27 (amended by [ADR-0009](0009-fallback-setup-ap.md): the setup AP
-  also comes up when the configured WiFi is unreachable for 3 minutes)
+  also comes up when the configured WiFi is unreachable for 3 minutes; and by
+  [ADR-0010](0010-ota-and-coredump.md): OTA images are not signed for now)
 
 ## Decision
 - Service AP with a per-device password at 192.168.4.1; only while no WiFi is configured or on

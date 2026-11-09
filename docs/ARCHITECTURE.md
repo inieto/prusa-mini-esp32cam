@@ -114,8 +114,9 @@ tick (1 s) ──► SnapshotScheduler.due(now)? ──no──► done
   is `POST`/`PUT` with `Content-Type: application/json` (CSRF blocked by SameSite + preflight).
   Automated clients use `Authorization: Bearer <api-token>`.
 - **No anonymous endpoints** except `/login` and the static assets of the login screen.
-- **OTA**: authenticated `POST /api/v1/ota`; image signature-verified (without burning eFuses)
-  and **automatic rollback** if the new version does not confirm health within 60 s.
+- **OTA**: authenticated `POST /api/v1/ota`; image checked (same project, SHA-256) and
+  **automatic rollback** unless the new version runs 60 s with the network up (ADR-0010; not
+  signed for now).
 - **TLS**: ESP-IDF CA bundle (covers the Let's Encrypt transition, S7).
 - UI never uses `innerHTML` with data: everything via `textContent` (XSS-safe by construction, S4).
 
@@ -127,7 +128,8 @@ tick (1 s) ──► SnapshotScheduler.due(now)? ──no──► done
   or 4 KB), with rotation that **deletes** old files (F6).
 - WiFi diagnostics in the log: RSSI on every connection (warning below −75 dBm) and named
   disconnect reasons.
-- `coredump` partition: after a panic, the next boot reports it and it can be downloaded via the API.
+- `coredump` partition: after a panic, the next boot reports it (task, PC, reason) and the ELF
+  can be downloaded from *System* (`GET /api/v1/coredump`).
 
 ## 9. Web UI
 
