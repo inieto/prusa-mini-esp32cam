@@ -66,6 +66,16 @@ token PrusaConnect keeps recognising the camera.
 python3 tools/mock_server.py 8080   # http://localhost:8080 (asks to create a user first)
 ```
 
+## Soak test (48 h)
+
+```sh
+python3 tools/soak.py http://prusacam.local --hours 48 --user <web user>
+```
+
+Asks for the password (or reads `PRUSACAM_PASSWORD`), samples `/api/v1/status` every minute
+into `soak-<host>-<date>.csv` and ends with a PASS/FAIL against the goal (≥ 99 % successful
+uploads, no reboots). `--report <csv>` summarises an interrupted run.
+
 ## License
 
 GPL-3.0 (styles and icons derive from the original project). The Prusa logo is a registered

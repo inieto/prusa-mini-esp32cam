@@ -35,6 +35,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Saving the WiFi settings while the camera has no working station (setup or fallback AP)
   reboots it straight away to join the new network.
 - Support for BOYA flash chips found on some AI Thinker clones.
+- `tools/soak.py`: long-running reliability check against a real camera (upload success
+  rate, reboots, RSSI, minimum heap) with a PASS/FAIL verdict.
 - Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
 - `AGENTS.md` (and `CLAUDE.md`, which imports it) with architecture invariants, commands and
   conventions for AI agents and contributors; ADR index and template.

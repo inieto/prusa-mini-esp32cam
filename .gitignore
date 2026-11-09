@@ -7,3 +7,4 @@ firmware/managed_components/
 
 # Documentos privados (reportes, notas): nunca se suben
 private/
+soak-*.csv
