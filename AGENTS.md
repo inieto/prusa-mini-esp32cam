@@ -67,11 +67,11 @@ on your own** — ask the maintainer, and make a backup first
 1. **`components/core` never includes ESP-IDF or FreeRTOS headers.** It must keep compiling with
    the host toolchain. Platform code goes in `components/device` behind a port (ADR-0002).
 2. **One owner per resource.** Only the task running `SnapshotService` touches the camera driver
-   and sensor. Other tasks *request* (e.g. `Ov2640Camera::request_settings`,
+   and sensor. Other tasks *request* (e.g. `EspCamera::request_settings`,
    `SnapshotService::request_snapshot`). HTTP handlers never call drivers (ADR-0003).
 3. **Frames are shared through `FrameRef`** (reference-counted slots of a preallocated
    `FramePool`). Never keep raw pointers to frame bytes beyond the life of a `FrameRef`; never
-   hold `camera_fb_t` outside `Ov2640Camera::capture`.
+   hold `camera_fb_t` outside `EspCamera::capture`.
 4. **No heap allocation in the capture/upload hot path**; buffers are reserved at boot. Internal
    RAM is scarce (TLS + WiFi); large buffers go to PSRAM.
 5. **Backend errors never tear down WiFi.** Recovery escalates (reconnect → reboot) only while the

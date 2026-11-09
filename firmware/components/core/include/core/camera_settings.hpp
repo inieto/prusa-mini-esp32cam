@@ -10,7 +10,8 @@
 
 namespace core {
 
-enum class Resolution : uint8_t { QVGA, CIF, VGA, SVGA, XGA, SXGA, UXGA };
+// Appended only: the numeric value is stored in NVS. QXGA needs an OV3660/OV5640 sensor.
+enum class Resolution : uint8_t { QVGA, CIF, VGA, SVGA, XGA, SXGA, UXGA, QXGA };
 
 struct Size {
   uint16_t width, height;
@@ -45,8 +46,9 @@ struct CameraSettings {
   friend bool operator==(const CameraSettings&, const CameraSettings&) = default;
 };
 
-// Worst-case JPEG size used to dimension frame buffers for a resolution/quality pair.
-size_t max_jpeg_size(Resolution resolution, uint8_t jpeg_quality);
+// Largest JPEG the camera driver can hand us at this resolution (it sizes its own buffers as
+// width*height/5 and truncates beyond that), plus headroom for EXIF. Used to size FramePool slots.
+size_t max_jpeg_size(Resolution resolution);
 
 Result<void> validate(const CameraSettings& settings);
 

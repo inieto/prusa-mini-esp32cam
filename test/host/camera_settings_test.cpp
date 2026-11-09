@@ -17,7 +17,7 @@ TEST(CameraSettings, RejectsOutOfRange) {
   s.brightness = 3;
   EXPECT_FALSE(validate(s).has_value());
   s = {};
-  s.resolution = static_cast<Resolution>(7);
+  s.resolution = static_cast<Resolution>(8);
   EXPECT_FALSE(validate(s).has_value());
 }
 
@@ -28,7 +28,8 @@ TEST(CameraSettings, ResolutionTableRoundTrips) {
 }
 
 TEST(CameraSettings, FrameBudgetFitsThreeSlotsInPsram) {
-  // Worst case: UXGA at best quality must still allow 3 slots within 2 MB of PSRAM.
-  EXPECT_LT(3 * max_jpeg_size(Resolution::UXGA, 10), 2u * 1024 * 1024);
-  EXPECT_GT(max_jpeg_size(Resolution::VGA, 10), 12u * 1024);  // > the 12.9 KB we observed
+  // Worst case: 3 QXGA slots (OV3660) must fit in 2 MB of PSRAM next to the driver's buffers.
+  EXPECT_LT(3 * max_jpeg_size(Resolution::QXGA), 2u * 1024 * 1024);
+  EXPECT_GT(max_jpeg_size(Resolution::VGA), 12u * 1024);  // > the 12.9 KB we observed
+  EXPECT_EQ(size_of(Resolution::QXGA), (Size{2048, 1536}));
 }

@@ -27,6 +27,13 @@ TEST(SettingsJson, PartialUpdateKeepsOtherFields) {
   EXPECT_TRUE(r->vflip);
 }
 
+TEST(SettingsJson, QxgaIsAcceptedByName) {
+  auto r = merge_camera_settings(CameraSettings{}, R"({"resolution":"qxga"})");
+  ASSERT_TRUE(r.has_value());
+  EXPECT_EQ(r->resolution, Resolution::QXGA);
+  EXPECT_EQ(resolution_name(Resolution::QXGA), "qxga");
+}
+
 TEST(SettingsJson, RejectsBadInput) {
   const CameraSettings s;
   EXPECT_FALSE(merge_camera_settings(s, "not json").has_value());

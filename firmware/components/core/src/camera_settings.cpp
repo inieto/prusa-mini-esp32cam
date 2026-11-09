@@ -7,11 +7,12 @@ namespace {
 
 constexpr std::array kResolutions = {
     Resolution::QVGA, Resolution::CIF,  Resolution::VGA,  Resolution::SVGA,
-    Resolution::XGA,  Resolution::SXGA, Resolution::UXGA,
+    Resolution::XGA,  Resolution::SXGA, Resolution::UXGA, Resolution::QXGA,
 };
 
-constexpr std::array<Size, 7> kSizes = {{
+constexpr std::array<Size, 8> kSizes = {{
     {320, 240}, {352, 288}, {640, 480}, {800, 600}, {1024, 768}, {1280, 1024}, {1600, 1200},
+    {2048, 1536},
 }};
 
 bool in_range(int value, int lo, int hi) { return value >= lo && value <= hi; }
@@ -29,12 +30,11 @@ std::optional<Resolution> resolution_for(Size size) {
 
 std::span<const Resolution> all_resolutions() { return kResolutions; }
 
-size_t max_jpeg_size(Resolution resolution, uint8_t jpeg_quality) {
+size_t max_jpeg_size(Resolution resolution) {
   const Size s = size_of(resolution);
   const size_t pixels = size_t{s.width} * s.height;
-  // Empirical OV2640 bounds: a busy scene at quality 10 stays under ~0.25 B/pixel.
-  const size_t divisor = jpeg_quality <= 12 ? 4 : jpeg_quality <= 20 ? 6 : 10;
-  return pixels / divisor + 16 * 1024;  // headroom for EXIF and headers
+  // esp32-camera allocates width*height/5 per JPEG frame buffer; nothing larger can arrive.
+  return pixels / 5 + 16 * 1024;  // headroom for EXIF and headers
 }
 
 Result<void> validate(const CameraSettings& s) {

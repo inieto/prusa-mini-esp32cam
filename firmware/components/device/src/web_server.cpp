@@ -11,6 +11,7 @@
 
 #include "core/settings_json.hpp"
 #include "device/diagnostics.hpp"
+#include "device/factory_reset.hpp"
 
 namespace device {
 namespace {
@@ -83,15 +84,18 @@ bool is_valid_hostname(std::string_view h) {
   return true;
 }
 
-void reboot_later(core::SystemControl& system) {
+void reboot_later(core::SystemControl& system,
+                  core::RebootReason reason = core::RebootReason::Requested) {
   // Reply first, reboot from a timer: the handler must return so the response is flushed.
+  static core::SystemControl* target = nullptr;
+  static core::RebootReason pending = core::RebootReason::Requested;
   static esp_timer_handle_t timer = nullptr;
+  target = &system;
+  pending = reason;
   if (!timer) {
     const esp_timer_create_args_t args = {
-        .callback = [](void* s) {
-          static_cast<core::SystemControl*>(s)->reboot(core::RebootReason::Requested);
-        },
-        .arg = &system,
+        .callback = [](void*) { target->reboot(pending); },
+        .arg = nullptr,
         .dispatch_method = ESP_TIMER_TASK,
         .name = "reboot",
         .skip_unhandled_events = true,
@@ -240,6 +244,11 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
       reboot_later(d_.system);
       return send_json(req, "202 Accepted", R"({"ok":true})");
     }
+    if (route == "factory-reset") {
+      erase_user_config();
+      reboot_later(d_.system, core::RebootReason::ConfigReset);
+      return send_json(req, "202 Accepted", R"({"ok":true})");
+    }
   }
   return send_error(req, "404 Not Found", "unknown endpoint");
 }
@@ -348,13 +357,22 @@ esp_err_t WebServer::camera_config(httpd_req_t* req, bool update) {
     if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
     const auto merged = core::merge_camera_settings(settings, *body);
     if (!merged) return send_error(req, "400 Bad Request", "invalid value");
+    if (!d_.camera.supports(merged->resolution)) {
+      return send_error(req, "400 Bad Request", "resolution not supported by this sensor");
+    }
     settings = *merged;
     if (auto r = d_.store.save_camera(settings); !r) {
       return send_error(req, "500 Internal Server Error", "could not save");
     }
     d_.camera.request_settings(settings);  // applied by the capture task before its next frame
   }
-  return send_json(req, "200 OK", core::camera_settings_to_json(settings));
+  // Read-only facts about the sensor ride along so the UI can offer only valid resolutions.
+  const std::string json = core::camera_settings_to_json(settings);
+  JsonPtr j(cJSON_ParseWithLength(json.data(), json.size()));
+  cJSON_AddStringToObject(j.get(), "sensor", d_.camera.sensor_name().c_str());
+  cJSON_AddStringToObject(j.get(), "max_resolution",
+                          std::string(core::resolution_name(d_.camera.max_resolution())).c_str());
+  return send_json(req, "200 OK", print(j.get()));
 }
 
 esp_err_t WebServer::connect_config(httpd_req_t* req, bool update) {
@@ -389,6 +407,7 @@ esp_err_t WebServer::connect_config(httpd_req_t* req, bool update) {
 esp_err_t WebServer::network_config(httpd_req_t* req, bool update) {
   WifiCredentials wifi = d_.store.load_wifi();
   bool reboot_required = false;
+  bool rebooting = false;
   if (update) {
     const auto body = read_json_body(req);
     if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
@@ -410,12 +429,19 @@ esp_err_t WebServer::network_config(httpd_req_t* req, bool update) {
     if (has_host) wifi.hostname = host;
     if (auto r = d_.store.save_wifi(wifi); !r) return send_error(req, "500 Internal Server Error", "could not save");
     reboot_required = true;
+    // Without a working station (first setup or fallback AP) there is nothing to keep running:
+    // reboot straight away so the camera joins the new network without another click.
+    if (!d_.network.connected() && !wifi.ssid.empty()) {
+      reboot_later(d_.system);
+      rebooting = true;
+    }
   }
   JsonPtr j(cJSON_CreateObject());
   cJSON_AddStringToObject(j.get(), "ssid", wifi.ssid.c_str());
   cJSON_AddBoolToObject(j.get(), "password_set", !wifi.password.empty());
   cJSON_AddStringToObject(j.get(), "hostname", wifi.hostname.c_str());
   cJSON_AddBoolToObject(j.get(), "reboot_required", reboot_required);
+  cJSON_AddBoolToObject(j.get(), "rebooting", rebooting);
   return send_json(req, "200 OK", print(j.get()));
 }
 

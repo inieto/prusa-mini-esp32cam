@@ -14,7 +14,7 @@ hexagonal architecture, actors and secure defaults.
 
 | Slice | Status |
 |---|---|
-| Portable core (policies, PrusaConnect protocol, EXIF, FramePool, JSON, UI bundle) + 46 host tests | ✅ |
+| Portable core (policies, PrusaConnect protocol, EXIF, FramePool, JSON, UI bundle) + 47 host tests | ✅ |
 | ESP-IDF adapters: camera, PrusaConnect client, WiFi/AP/mDNS/SNTP, NVS | ✅ running on hardware (board with OV3660) |
 | HTTP server: login (PBKDF2 + cookie), REST API `/api/v1`, embedded gzipped UI (~18 KB) | ✅ running on hardware |
 | Diagnostics: RAM log in the web UI, reboot history with previous uptime, WiFi RSSI/reasons | ✅ |

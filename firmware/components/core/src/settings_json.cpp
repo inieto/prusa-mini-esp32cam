@@ -13,8 +13,8 @@ struct JsonDeleter {
 };
 using JsonPtr = std::unique_ptr<cJSON, JsonDeleter>;
 
-constexpr std::array<std::string_view, 7> kResolutionNames = {"qvga", "cif",  "vga", "svga",
-                                                              "xga",  "sxga", "uxga"};
+constexpr std::array<std::string_view, 8> kResolutionNames = {"qvga", "cif",  "vga",  "svga",
+                                                              "xga",  "sxga", "uxga", "qxga"};
 
 int rotation_degrees(Rotation r) { return static_cast<int>(r) * 90; }
 
@@ -75,6 +75,10 @@ struct Reader {
 };
 
 }  // namespace
+
+std::string_view resolution_name(Resolution resolution) {
+  return kResolutionNames[static_cast<size_t>(resolution)];
+}
 
 std::string camera_settings_to_json(const CameraSettings& settings) {
   CameraSettings copy = settings;

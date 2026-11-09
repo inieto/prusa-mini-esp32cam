@@ -17,5 +17,7 @@ inline constexpr int kCamXclkHz = 20'000'000;
 
 inline constexpr gpio_num_t kFlashLed = GPIO_NUM_4;   // white LED, shares SD DATA1 (SD runs 1-bit)
 inline constexpr gpio_num_t kStatusLed = GPIO_NUM_33;  // red LED, active low
+// Factory reset jumper to GND at power-on (v1.1.2 gesture). Strapping pin: never drive it high.
+inline constexpr gpio_num_t kResetPin = GPIO_NUM_12;
 
 }  // namespace device::board

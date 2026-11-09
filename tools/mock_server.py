@@ -5,6 +5,7 @@ Usage: python3 tools/mock_server.py [port]
 First load asks to create a user, like a fresh device.
 """
 import json
+import os
 import sys
 import time
 from http import HTTPStatus
@@ -26,6 +27,7 @@ state = {
         "ae_level": 0, "manual_exposure": 300, "auto_gain": True, "gain_ceiling": 4,
         "manual_gain": 0, "auto_white_balance": True, "lens_correction": True,
         "flash_on_capture": False, "flash_lead_ms": 200, "flash_duty_pct": 80,
+        "sensor": "OV3660", "max_resolution": "qxga",  # read-only, reported by the device
     },
     "connect": {"token_set": True, "hostname": "connect.prusa3d.com",
                 "fingerprint": "MjQ4MTc5MTgzMTY4NjkxMzIgMDA6MDA6MDA6MDA6MDA6MDA="},
@@ -118,13 +120,18 @@ class Handler(SimpleHTTPRequestHandler):
             return self.wfile.write(body)
         if path.startswith("config/"):
             section = path.split("/", 1)[1]
+            extra = {}
             if method == "PUT":
                 changes = self.read_json()
                 for secret, flag in (("token", "token_set"), ("password", "password_set")):
                     if secret in changes:
                         state[section][flag] = bool(changes.pop(secret))
                 state[section].update(changes)
-            return self.send_json(state[section])
+                if section == "network":
+                    # MOCK_SETUP_AP=1 simulates a camera without a working station.
+                    extra = {"reboot_required": True,
+                             "rebooting": os.environ.get("MOCK_SETUP_AP") == "1"}
+            return self.send_json({**state[section], **extra})
         if path == "wifi/scan":
             return self.send_json([
                 {"ssid": "nietogiardinieri", "rssi": -48, "channel": 6, "auth": "WPA2"},
@@ -137,6 +144,10 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "light" and method == "POST":
             state["light"] = bool(self.read_json().get("on"))
             return self.send_json({"ok": True})
+        if path == "factory-reset" and method == "POST":
+            state["user"] = None
+            state["session"] = None
+            return self.send_json({"ok": True}, HTTPStatus.ACCEPTED)
         if path in ("reboot", "logout") and method == "POST":
             if path == "logout":
                 state["session"] = None

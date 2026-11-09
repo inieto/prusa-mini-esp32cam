@@ -2,7 +2,7 @@
 # may include ESP-IDF headers.
 idf_component_register(
   SRCS src/auth.cpp src/camera.cpp src/clocks.cpp src/connect_client.cpp src/diagnostics.cpp
-       src/log.cpp src/network.cpp src/settings_store.cpp src/web_server.cpp
+       src/factory_reset.cpp src/log.cpp src/network.cpp src/settings_store.cpp src/web_server.cpp
   INCLUDE_DIRS include
   REQUIRES core esp_app_format esp_driver_gpio esp_driver_ledc esp_http_client esp_http_server esp_netif
            esp_wifi esp_timer json mbedtls nvs_flash esp32-camera mdns)

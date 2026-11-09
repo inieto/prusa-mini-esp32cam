@@ -17,6 +17,7 @@
 #include "device/auth.hpp"
 #include "device/connect_client.hpp"
 #include "device/diagnostics.hpp"
+#include "device/factory_reset.hpp"
 #include "device/log.hpp"
 #include "device/network.hpp"
 #include "device/settings_store.hpp"
@@ -52,9 +53,9 @@ void seed_dev_settings(device::WifiCredentials& wifi, device::ConnectCredentials
   }
 }
 
-core::FramePool* make_frame_pool() {
-  // Worst case (UXGA, best quality) so resolution changes never need reallocation.
-  const size_t slot = core::max_jpeg_size(core::Resolution::UXGA, 10);
+core::FramePool* make_frame_pool(core::Resolution largest) {
+  // Sized for the sensor's largest resolution so resolution changes never need reallocation.
+  const size_t slot = core::max_jpeg_size(largest);
   static std::array<std::span<uint8_t>, kFrameSlots> buffers;
   for (auto& b : buffers) {
     auto* mem = static_cast<uint8_t*>(heap_caps_malloc(slot, MALLOC_CAP_SPIRAM));
@@ -96,6 +97,7 @@ extern "C" void app_main() {
 
   if (auto r = device::SettingsStore::init_flash(); !r) ESP_LOGE(kTag, "NVS init failed");
   device::record_boot(reset_reason);
+  device::check_factory_reset_pin(g_system);
   g_auth.load();
 
   device::WifiCredentials wifi = g_store.load_wifi();
@@ -113,12 +115,13 @@ extern "C" void app_main() {
   }
   g_connect.set_credentials(connect);
 
-  core::FramePool* pool = make_frame_pool();
-  if (!pool) return;
-  static device::Ov2640Camera camera{*pool, g_wall, g_clock};
+  static device::EspCamera camera{g_wall, g_clock};
   if (auto r = camera.init(g_store.load_camera()); !r) {
     ESP_LOGE(kTag, "camera init failed; snapshots disabled until reboot");
   }
+  core::FramePool* pool = make_frame_pool(camera.max_resolution());
+  if (!pool) return;
+  camera.attach_pool(*pool);
 
   static core::SnapshotService service{
       {camera, g_connect, g_network, g_system, g_clock, g_log},

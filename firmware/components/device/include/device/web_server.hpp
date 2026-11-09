@@ -23,7 +23,7 @@ class WebServer {
  public:
   struct Deps {
     core::SnapshotService& service;
-    Ov2640Camera& camera;
+    EspCamera& camera;
     PrusaConnectClient& connect;
     SettingsStore& store;
     Network& network;

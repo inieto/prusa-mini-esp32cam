@@ -42,7 +42,7 @@ that firmware (not yet published in the repo).
                              │ implement        │ implement
    ┌─────────────────────────┴──┐        ┌──────┴──────────────────────┐
    │ ESP-IDF adapters (device)  │        │ fakes (test/host)            │
-   │ camera_ov2640, http_client │        │ FakeCamera, FakeClock,       │
+   │ camera, http_client       │        │ FakeCamera, FakeClock,       │
    │ wifi, nvs_store, sd, httpd │        │ FakeSnapshotSink, …          │
    └────────────────────────────┘        └──────────────────────────────┘
                  ▲

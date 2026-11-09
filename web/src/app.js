@@ -67,8 +67,13 @@ const STATE_CLASS = {
 // ---------- declarative settings forms ----------
 const RESOLUTIONS = [
   ['qvga', '320×240'], ['cif', '352×288'], ['vga', '640×480'], ['svga', '800×600'],
-  ['xga', '1024×768'], ['sxga', '1280×1024'], ['uxga', '1600×1200'],
+  ['xga', '1024×768'], ['sxga', '1280×1024'], ['uxga', '1600×1200'], ['qxga', '2048×1536'],
 ];
+// Only the resolutions the detected sensor can deliver (the device reports its largest one).
+const resolutionsFor = (v) => {
+  const last = RESOLUTIONS.findIndex(([key]) => key === v.max_resolution);
+  return last < 0 ? RESOLUTIONS : RESOLUTIONS.slice(0, last + 1);
+};
 const LEVEL = { type: 'range', min: -2, max: 2, step: 1 };
 
 const FORMS = {
@@ -77,7 +82,8 @@ const FORMS = {
     endpoint: 'config/camera',
     sections: [
       ['Image', [
-        { key: 'resolution', label: 'Resolution', type: 'select', options: RESOLUTIONS },
+        { key: 'sensor', label: 'Sensor', type: 'text', readonly: true },
+        { key: 'resolution', label: 'Resolution', type: 'select', options: resolutionsFor },
         { key: 'jpeg_quality', label: 'JPEG quality', type: 'range', min: 10, max: 63, step: 1,
           invert: true, hint: 'Further right = better quality and a larger file' },
         { key: 'rotation', label: 'Rotation', type: 'select',
@@ -169,11 +175,12 @@ function fieldControl(field, values, onChange) {
       return [input, shown];
     }
     case 'select': {
+      const options = typeof field.options === 'function' ? field.options(values) : field.options;
       const select = h('select', { id: `f-${field.key}` },
-        field.options.map(([v, text]) => h('option', { value: v, text, selected: String(v) === String(value) })));
+        options.map(([v, text]) => h('option', { value: v, text, selected: String(v) === String(value) })));
       select.addEventListener('change', () => {
         const raw = select.value;
-        onChange(typeof field.options[0][0] === 'number' ? Number(raw) : raw);
+        onChange(typeof options[0][0] === 'number' ? Number(raw) : raw);
       });
       return select;
     }
@@ -235,7 +242,9 @@ async function renderForm(name) {
       const result = await api(spec.endpoint, { method: 'PUT', body: changes });
       Object.assign(values, result);
       for (const k of Object.keys(changes)) delete changes[k];
-      toast(result.reboot_required ? 'Saved. Applies after a reboot.' : 'Saved');
+      toast(result.rebooting
+        ? 'Saved. Rebooting to join the network: reconnect this device to your WiFi.'
+        : result.reboot_required ? 'Saved. Applies after a reboot.' : 'Saved');
       draw();
       refreshStatus();
     } catch (e) {
@@ -274,6 +283,26 @@ function wifiScanner() {
       body));
 }
 
+// Two-step button for destructive actions (no modal dialogs: they block the page).
+function confirmButton(label, armedLabel, onConfirm) {
+  const b = h('button', { class: 'btn medium', type: 'button', text: label });
+  let timer;
+  b.addEventListener('click', async () => {
+    if (!b.dataset.armed) {
+      b.dataset.armed = '1';
+      b.textContent = armedLabel;
+      timer = setTimeout(() => { delete b.dataset.armed; b.textContent = label; }, 4000);
+      return;
+    }
+    clearTimeout(timer);
+    delete b.dataset.armed;
+    b.textContent = label;
+    b.disabled = true;
+    try { await onConfirm(); } finally { b.disabled = false; }
+  });
+  return b;
+}
+
 async function renderSystem() {
   const view = $('#view');
   const s = await api('status');
@@ -293,6 +322,13 @@ async function renderSystem() {
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {}, h('th', { text: 'Reason' }), h('th', { text: 'After' }))),
       h('tbody', {}, (s.resets || []).map((r) => h('tr', {}, h('td', { text: r.reason }), h('td', { text: duration(r.uptime_s) }))))),
+    h('h2', { text: 'Maintenance' }),
+    h('div', { class: 'form' },
+      h('label', { class: 'key', text: 'Factory reset' }),
+      h('div', { class: 'value' }, confirmButton('Erase settings', 'Click again to erase', async () => {
+        await action('factory-reset', {}, 'Settings erased. Rebooting into setup mode…');
+      })),
+      h('div', { class: 'hint', text: 'Forgets the web user, WiFi, PrusaConnect token and camera settings. Same as holding GPIO12 to GND for 10 s at power-on.' })),
     h('h2', { text: 'Log' }),
     logs,
   );

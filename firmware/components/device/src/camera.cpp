@@ -6,6 +6,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include <algorithm>
+
 #include "device/board.hpp"
 
 namespace device {
@@ -25,17 +27,31 @@ framesize_t to_framesize(core::Resolution r) {
     case core::Resolution::XGA: return FRAMESIZE_XGA;
     case core::Resolution::SXGA: return FRAMESIZE_SXGA;
     case core::Resolution::UXGA: return FRAMESIZE_UXGA;
+    case core::Resolution::QXGA: return FRAMESIZE_QXGA;
   }
   return FRAMESIZE_SVGA;
 }
 
 }  // namespace
 
-Ov2640Camera::Ov2640Camera(core::FramePool& pool, const core::WallClock& wall,
-                           const core::Clock& clock)
-    : pool_(pool), wall_(wall), clock_(clock) {}
+EspCamera::EspCamera(const core::WallClock& wall, const core::Clock& clock)
+    : wall_(wall), clock_(clock) {}
 
-core::Result<void> Ov2640Camera::init(const core::CameraSettings& settings) {
+void EspCamera::detect_sensor() {
+  sensor_t* sensor = esp_camera_sensor_get();
+  if (!sensor) return;
+  const camera_sensor_info_t* info = esp_camera_sensor_get_info(&sensor->id);
+  if (info) sensor_name_ = info->name;
+  // Larger sensors (OV5640) could go beyond QXGA, but PSRAM cannot hold bigger frames
+  // three times over next to the driver's own buffers.
+  max_resolution_ = info && info->max_size >= FRAMESIZE_QXGA ? core::Resolution::QXGA
+                                                             : core::Resolution::UXGA;
+  ESP_LOGI(kTag, "sensor %s (PID 0x%04x), up to %ux%u", sensor_name_.c_str(),
+           static_cast<unsigned>(sensor->id.PID), core::size_of(max_resolution_).width,
+           core::size_of(max_resolution_).height);
+}
+
+core::Result<void> EspCamera::init(const core::CameraSettings& settings) {
   const ledc_timer_config_t timer = {
       .speed_mode = LEDC_LOW_SPEED_MODE,
       .duty_resolution = LEDC_TIMER_8_BIT,
@@ -58,14 +74,23 @@ core::Result<void> Ov2640Camera::init(const core::CameraSettings& settings) {
   };
   ledc_channel_config(&channel);
 
-  if (auto r = start_driver(settings.resolution, settings.jpeg_quality); !r) return r;
-  apply_sensor(settings);
+  // Every supported sensor handles UXGA, so start there at most; only once the sensor is known
+  // can a larger resolution be requested (or a stored one be clamped after a sensor swap).
+  core::CameraSettings s = settings;
+  const core::Resolution first = std::min(s.resolution, core::Resolution::UXGA);
+  if (auto r = start_driver(first, s.jpeg_quality); !r) return r;
+  detect_sensor();
+  if (!supports(s.resolution)) s.resolution = max_resolution_;
+  if (s.resolution != first) {
+    if (auto r = start_driver(s.resolution, s.jpeg_quality); !r) return r;
+  }
+  apply_sensor(s);
   std::lock_guard lock(mutex_);
-  current_ = settings;
+  current_ = s;
   return {};
 }
 
-core::Result<void> Ov2640Camera::start_driver(core::Resolution resolution, uint8_t quality) {
+core::Result<void> EspCamera::start_driver(core::Resolution resolution, uint8_t quality) {
   if (driver_started_) {
     esp_camera_deinit();
     driver_started_ = false;
@@ -106,7 +131,7 @@ core::Result<void> Ov2640Camera::start_driver(core::Resolution resolution, uint8
   return {};
 }
 
-void Ov2640Camera::apply_sensor(const core::CameraSettings& s) {
+void EspCamera::apply_sensor(const core::CameraSettings& s) {
   sensor_t* sensor = esp_camera_sensor_get();
   if (!sensor) return;
   sensor->set_quality(sensor, s.jpeg_quality);
@@ -131,8 +156,9 @@ void Ov2640Camera::apply_sensor(const core::CameraSettings& s) {
   sensor->set_dcw(sensor, 1);
 }
 
-core::Result<void> Ov2640Camera::apply(const core::CameraSettings& settings) {
+core::Result<void> EspCamera::apply(const core::CameraSettings& settings) {
   if (auto v = core::validate(settings); !v) return v;
+  if (!supports(settings.resolution)) return core::fail(core::Errc::OutOfRange);
   const core::CameraSettings previous = this->settings();
   if (settings.resolution != previous.resolution) {
     // The driver sizes its buffers at init, so a resolution change needs a restart.
@@ -144,22 +170,22 @@ core::Result<void> Ov2640Camera::apply(const core::CameraSettings& settings) {
   return {};
 }
 
-core::CameraSettings Ov2640Camera::settings() const {
+core::CameraSettings EspCamera::settings() const {
   std::lock_guard lock(mutex_);
   return pending_.value_or(current_);
 }
 
-void Ov2640Camera::request_settings(const core::CameraSettings& settings) {
+void EspCamera::request_settings(const core::CameraSettings& settings) {
   std::lock_guard lock(mutex_);
   pending_ = settings;
 }
 
-void Ov2640Camera::set_led_duty(uint8_t percent) {
+void EspCamera::set_led_duty(uint8_t percent) {
   ledc_set_duty(LEDC_LOW_SPEED_MODE, kLedChannel, kLedMaxDuty * percent / 100);
   ledc_update_duty(LEDC_LOW_SPEED_MODE, kLedChannel);
 }
 
-void Ov2640Camera::set_light(bool on) {
+void EspCamera::set_light(bool on) {
   uint8_t duty;
   {
     std::lock_guard lock(mutex_);
@@ -169,7 +195,7 @@ void Ov2640Camera::set_light(bool on) {
   set_led_duty(on ? duty : 0);
 }
 
-core::Result<core::FrameRef> Ov2640Camera::capture() {
+core::Result<core::FrameRef> EspCamera::capture() {
   std::optional<core::CameraSettings> pending;
   {
     std::lock_guard lock(mutex_);
@@ -179,9 +205,9 @@ core::Result<core::FrameRef> Ov2640Camera::capture() {
     if (auto r = apply(*pending); !r) ESP_LOGW(kTag, "settings rejected (%d)", (int)r.error().code);
   }
   const core::CameraSettings s = settings();
-  if (!driver_started_) return core::fail(core::Errc::Io);
+  if (!driver_started_ || !pool_) return core::fail(core::Errc::Io);
 
-  std::optional<core::FrameWriter> writer = pool_.acquire();
+  std::optional<core::FrameWriter> writer = pool_->acquire();
   if (!writer) return core::fail(core::Errc::Busy);  // every slot is being read
 
   const bool flash = s.flash_on_capture && !light_on_;
@@ -196,7 +222,8 @@ core::Result<core::FrameRef> Ov2640Camera::capture() {
   if (flash) set_led_duty(0);  // always, whatever happened with the capture
   if (!fb) return core::fail(core::Errc::Timeout);
 
-  const core::ExifInfo exif{.rotation = s.rotation, .taken_at = wall_.utc_now()};
+  const core::ExifInfo exif{.rotation = s.rotation, .model = sensor_name_,
+                            .taken_at = wall_.utc_now()};
   const core::Result<size_t> written =
       core::write_jpeg_with_exif({fb->buf, fb->len}, exif, writer->buffer());
   const core::FrameInfo info{.width = static_cast<uint16_t>(fb->width),

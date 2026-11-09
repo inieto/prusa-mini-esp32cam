@@ -8,6 +8,9 @@
 
 namespace core {
 
+// API name of a resolution ("svga", "qxga", ...).
+std::string_view resolution_name(Resolution resolution);
+
 std::string camera_settings_to_json(const CameraSettings& settings);
 
 // Applies a partial JSON object on top of `settings`. Unknown keys, wrong types or values out of

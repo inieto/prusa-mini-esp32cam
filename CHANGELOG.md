@@ -26,7 +26,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
   disconnect reason by name on the first failure and every 10th.
 - Creating the user asks to repeat the password. The login password fields have an eye button
   to show or hide what was typed.
-- Portable core with 46 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
+- OV3660/OV5640 support: the sensor is detected at boot, reported in the Camera tab and written
+  to the EXIF model (it was hard-coded "OV2640"). OV3660 adds 2048×1536 (QXGA); the UI only
+  offers resolutions the sensor can deliver and the API rejects the rest.
+- Factory reset: hold GPIO12 to GND for 10 s at power-on (same gesture as v1.1.2; the red LED
+  blinks, then stays on until the jumper is removed), or *System → Factory reset* in the web UI.
+  It forgets the web user, WiFi, token and camera settings; the setup AP password stays.
+- Saving the WiFi settings while the camera has no working station (setup or fallback AP)
+  reboots it straight away to join the new network.
+- Support for BOYA flash chips found on some AI Thinker clones.
+- Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
 - `AGENTS.md` (and `CLAUDE.md`, which imports it) with architecture invariants, commands and
   conventions for AI agents and contributors; ADR index and template.
 
