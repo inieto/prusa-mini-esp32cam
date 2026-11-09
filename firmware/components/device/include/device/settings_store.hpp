@@ -8,6 +8,7 @@
 #include "core/camera_settings.hpp"
 #include "core/storage_policy.hpp"
 #include "device/connect_client.hpp"
+#include "device/printer_monitor.hpp"
 
 namespace device {
 
@@ -29,6 +30,9 @@ class SettingsStore {
 
   core::CameraSettings load_camera() const;
   core::Result<void> save_camera(const core::CameraSettings& camera);
+
+  PrinterSettings load_printer() const;
+  core::Result<void> save_printer(const PrinterSettings& printer);
 
   core::StorageSettings load_storage() const;
   core::Result<void> save_storage(const core::StorageSettings& storage);

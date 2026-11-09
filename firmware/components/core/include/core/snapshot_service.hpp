@@ -11,6 +11,7 @@
 
 #include "core/backoff.hpp"
 #include "core/ports.hpp"
+#include "core/printer.hpp"
 #include "core/recovery.hpp"
 #include "core/scheduler.hpp"
 
@@ -38,6 +39,7 @@ struct ServiceStatus {
   std::optional<Millis> interval;  // empty = manual
   std::optional<Millis> next_capture_at;
   Millis without_network_success{0};
+  bool uploads_paused = false;  // "only while printing" and the printer is idle
 };
 
 class SnapshotService {
@@ -68,6 +70,11 @@ class SnapshotService {
   // capture, uploaded or not. Up to kMaxObservers.
   void add_observer(FrameObserver& observer);
   static constexpr size_t kMaxObservers = 4;
+  void set_printer(const PrinterInfo* printer) { printer_ = printer; }
+
+  // Thread-safe: upload to PrusaConnect only while the printer is busy (PrintActivity rules).
+  // Frames are still captured on schedule for the web UI and the timelapse.
+  void set_upload_only_while_printing(bool on) { only_while_printing_ = on; }
 
   // Drive from the owning task roughly once per second.
   void tick();
@@ -96,6 +103,9 @@ class SnapshotService {
   std::array<FrameObserver*, kMaxObservers> observers_{};
   size_t observer_count_ = 0;
 
+  const PrinterInfo* printer_ = nullptr;
+  PrintActivity activity_;
+  std::atomic<bool> only_while_printing_{false};
   std::atomic<bool> snapshot_requested_{false};
   std::atomic<bool> info_requested_{false};
 

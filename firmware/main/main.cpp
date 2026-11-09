@@ -20,6 +20,7 @@
 #include "device/firmware.hpp"
 #include "device/log.hpp"
 #include "device/network.hpp"
+#include "device/printer_monitor.hpp"
 #include "device/settings_store.hpp"
 #include "device/storage.hpp"
 #include "device/web_server.hpp"
@@ -41,6 +42,7 @@ device::EspSystem g_system{g_network};
 device::PrusaConnectClient g_connect;
 device::Auth g_auth;
 device::Storage g_storage{g_clock, g_wall};
+device::PrinterMonitor g_printer;
 
 // Seeds the dev values from menuconfig into NVS the first time (bring-up convenience).
 void seed_dev_settings(device::WifiCredentials& wifi, device::ConnectCredentials& connect) {
@@ -142,15 +144,20 @@ extern "C" void app_main() {
       {.seed = device::hardware_random()},
       {.name = wifi.hostname, .firmware = app->version}};
 
-  g_storage.start(g_store.load_storage(), nullptr);
+  const device::PrinterSettings printer = g_store.load_printer();
+  g_printer.start(printer);
+  service.set_printer(&g_printer);
+  service.set_upload_only_while_printing(printer.upload_only_while_printing);
+  g_storage.start(g_store.load_storage(), &g_printer);
   service.add_observer(g_storage);
 
   xTaskCreatePinnedToCore(service_task, "snapshot", kServiceStack, &service, 5, nullptr, 1);
 
   const core::Result<core::WebBundle> bundle = core::WebBundle::parse(device::embedded_web_bundle());
   if (!bundle) ESP_LOGE(kTag, "embedded web UI is corrupt");
-  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_network, g_system, g_auth,
-                                g_clock, bundle.value_or(core::WebBundle{}), app->version}};
+  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer,
+                                g_network, g_system, g_auth, g_clock,
+                                bundle.value_or(core::WebBundle{}), app->version}};
   if (auto r = web.start(); !r) ESP_LOGE(kTag, "HTTP server failed to start");
   if (g_auth.setup_required()) {
     ESP_LOGW(kTag, "No web user yet: open the UI within 15 minutes to create one");

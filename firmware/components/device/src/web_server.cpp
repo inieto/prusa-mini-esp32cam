@@ -262,6 +262,7 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
   }
   if (get && route == "wifi/scan") return wifi_scan(req);
   if ((get || put) && route == "config/storage") return storage_config(req, put);
+  if ((get || put) && route == "config/printer") return printer_config(req, put);
   if (get && route == "sd") return sd_status(req);
   if (get && route == "sd/list") return sd_list(req);
   if (get && route == "sd/file") return sd_file(req);
@@ -349,6 +350,7 @@ esp_err_t WebServer::get_status(httpd_req_t* req) {
   } else {
     cJSON_AddNullToObject(c, "last_upload_ago_s");
   }
+  cJSON_AddBoolToObject(c, "uploads_paused", s.uploads_paused);
   cJSON_AddNumberToObject(c, "uploads_ok", s.uploads_ok);
   cJSON_AddNumberToObject(c, "uploads_failed", s.uploads_failed);
   cJSON_AddNumberToObject(c, "capture_failures", s.capture_failures);
@@ -364,6 +366,20 @@ esp_err_t WebServer::get_status(httpd_req_t* req) {
     cJSON_AddNumberToObject(c, "frame_seq", frame.info().sequence);
     cJSON_AddNumberToObject(c, "frame_age_s",
                             static_cast<double>((now - frame.info().captured_at).count() / 1000));
+  }
+
+  const PrinterSettings ps = d_.printer.settings();
+  if (ps.host.empty()) {
+    cJSON_AddNullToObject(root.get(), "printer");
+  } else {
+    const core::PrinterJob job = d_.printer.job();
+    cJSON* p = cJSON_AddObjectToObject(root.get(), "printer");
+    cJSON_AddBoolToObject(p, "reachable", d_.printer.reachable());
+    cJSON_AddStringToObject(p, "error", d_.printer.last_error().c_str());
+    cJSON_AddStringToObject(p, "phase", std::string(core::to_string(job.phase)).c_str());
+    cJSON_AddStringToObject(p, "file", job.file.c_str());
+    cJSON_AddNumberToObject(p, "progress", job.progress);
+    cJSON_AddNumberToObject(p, "time_left_s", job.time_left_s);
   }
 
   cJSON* w = cJSON_AddObjectToObject(root.get(), "wifi");
@@ -616,6 +632,43 @@ esp_err_t WebServer::storage_config(httpd_req_t* req, bool update) {
   cJSON_AddBoolToObject(j.get(), "log_to_sd", s.log_to_sd);
   cJSON_AddStringToObject(j.get(), "timelapse", std::string(core::to_string(s.timelapse)).c_str());
   cJSON_AddNumberToObject(j.get(), "timelapse_interval_s", s.timelapse_interval_s);
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::printer_config(httpd_req_t* req, bool update) {
+  PrinterSettings p = d_.printer.settings();
+  if (update) {
+    const auto body = read_json_body(req);
+    if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
+    JsonPtr j(cJSON_ParseWithLength(body->data(), body->size()));
+    if (!j || !cJSON_IsObject(j.get())) return send_error(req, "400 Bad Request", "invalid JSON");
+    bool has_host = false, has_user = false, has_pass = false;
+    const std::string host = json_string(j.get(), "host", &has_host);
+    const std::string user = json_string(j.get(), "user", &has_user);
+    const std::string pass = json_string(j.get(), "password", &has_pass);
+    if (has_host && !host.empty() && !PrinterMonitor::valid_host(host)) {
+      return send_error(req, "400 Bad Request", "invalid printer address");
+    }
+    if (has_user && (user.empty() || user.size() > 32)) return send_error(req, "400 Bad Request", "invalid user");
+    if (has_pass && pass.size() > 64) return send_error(req, "400 Bad Request", "password too long");
+    if (has_host) p.host = host;
+    if (has_user) p.user = user;
+    if (has_pass) p.password = pass;
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(j.get(), "upload_only_while_printing")) {
+      if (!cJSON_IsBool(v)) return send_error(req, "400 Bad Request", "invalid value");
+      p.upload_only_while_printing = cJSON_IsTrue(v);
+    }
+    if (auto r = d_.store.save_printer(p); !r) {
+      return send_error(req, "500 Internal Server Error", "could not save");
+    }
+    d_.printer.set_settings(p);
+    d_.service.set_upload_only_while_printing(p.upload_only_while_printing);
+  }
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddStringToObject(j.get(), "host", p.host.c_str());
+  cJSON_AddStringToObject(j.get(), "user", p.user.c_str());
+  cJSON_AddBoolToObject(j.get(), "password_set", !p.password.empty());  // never echo it
+  cJSON_AddBoolToObject(j.get(), "upload_only_while_printing", p.upload_only_while_printing);
   return send_json(req, "200 OK", print(j.get()));
 }
 

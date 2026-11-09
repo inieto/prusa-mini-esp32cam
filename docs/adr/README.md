@@ -16,3 +16,4 @@ it. Template: [`0000-template.md`](0000-template.md).
 | [0009](0009-fallback-setup-ap.md) | Fallback setup AP when the configured WiFi is unreachable | accepted |
 | [0010](0010-ota-and-coredump.md) | Web OTA with health-checked rollback, unsigned images; crash dumps over the API | accepted |
 | [0011](0011-sd-card.md) | SD card actor: batched logs with rotation, timelapse, file browser | accepted |
+| [0012](0012-prusalink.md) | Read the printer state from PrusaLink | accepted |

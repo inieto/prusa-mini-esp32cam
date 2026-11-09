@@ -56,6 +56,7 @@
           <p class="lead">PrusaConnect: <span class="state" id="connect-state">…</span></p>
           <p class="lead">Interval: <b id="interval">…</b></p>
           <p class="lead">Last upload: <b id="last-upload">…</b></p>
+          <p class="lead" id="printer-line" hidden>Printer: <b id="printer-state">…</b></p>
           <button class="btn" id="snap-now" type="button">Take and send snapshot</button>
           <a class="btn" id="download" href="api/v1/snapshot.jpg" download="snapshot.jpg"
              style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Download snapshot</a>
@@ -65,6 +66,7 @@
       <nav class="tabs" id="tabs">
         <a href="#camera">Camera</a>
         <a href="#connect">PrusaConnect</a>
+        <a href="#printer">Printer</a>
         <a href="#network">Network</a>
         <a href="#storage">Storage</a>
         <a href="#system">System</a>

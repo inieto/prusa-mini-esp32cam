@@ -2,7 +2,7 @@
 # may include ESP-IDF headers.
 idf_component_register(
   SRCS src/auth.cpp src/camera.cpp src/clocks.cpp src/connect_client.cpp src/diagnostics.cpp
-       src/factory_reset.cpp src/firmware.cpp src/log.cpp src/network.cpp src/settings_store.cpp src/storage.cpp
+       src/factory_reset.cpp src/firmware.cpp src/log.cpp src/network.cpp src/printer_monitor.cpp src/settings_store.cpp src/storage.cpp
        src/web_server.cpp
   INCLUDE_DIRS include
   REQUIRES core app_update bootloader_support espcoredump esp_partition esp_app_format esp_driver_gpio esp_driver_ledc esp_http_client esp_http_server esp_netif

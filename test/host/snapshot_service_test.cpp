@@ -63,6 +63,27 @@ TEST_F(SnapshotServiceTest, ObserversSeeEveryScheduledFrameEvenOffline) {
   EXPECT_EQ(connect.uploads, 0u);
 }
 
+TEST_F(SnapshotServiceTest, UploadsOnlyWhilePrintingWithoutTriggeringRecovery) {
+  struct Printer : core::PrinterInfo {
+    core::PrinterPhase phase = core::PrinterPhase::Idle;
+    core::PrinterJob job() const override { return {.phase = phase}; }
+  } printer;
+  auto s = make({.default_interval = 30 * kSec});
+  s.set_printer(&printer);
+  s.set_upload_only_while_printing(true);
+  run(s, 2 * 60 * kMin);  // two idle hours
+  EXPECT_EQ(connect.uploads, 0u);
+  EXPECT_TRUE(s.status().uploads_paused);
+  EXPECT_TRUE(system.reboots.empty());
+  EXPECT_EQ(system.reconnects, 0u);
+  EXPECT_TRUE(s.latest_frame());  // still capturing for the UI and the timelapse
+
+  printer.phase = core::PrinterPhase::Printing;
+  run(s, 61 * kSec);
+  EXPECT_GE(connect.uploads, 2u);
+  EXPECT_FALSE(s.status().uploads_paused);
+}
+
 TEST_F(SnapshotServiceTest, FollowsTriggerSchemeFromPrusaConnect) {
   connect.info_results.push_back(std::string(R"({"config":{"trigger_scheme":"TEN_SEC"}})"));
   auto s = make({.default_interval = 60 * kSec});

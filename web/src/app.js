@@ -146,6 +146,21 @@ const FORMS = {
     ],
     extra: () => wifiScanner(),
   },
+  printer: {
+    title: 'Printer',
+    endpoint: 'config/printer',
+    sections: [
+      ['PrusaLink', [
+        { key: 'host', label: 'Printer address', type: 'text',
+          hint: 'IP or name of the printer on your network, e.g. 192.168.0.50. Empty disables PrusaLink.' },
+        { key: 'user', label: 'User', type: 'text', hint: 'Usually "maker"' },
+        { key: 'password', label: 'Password', type: 'secret', setKey: 'password_set',
+          hint: 'On the printer: Settings → Network → PrusaLink' },
+        { key: 'upload_only_while_printing', label: 'Upload to PrusaConnect only while printing', type: 'switch',
+          hint: 'Keeps capturing for this page and the timelapse; uploads resume 5 min after a print ends. If the printer is unreachable, uploads continue.' },
+      ]],
+    ],
+  },
   storage: {
     title: 'Storage',
     endpoint: 'config/storage',
@@ -491,6 +506,15 @@ async function refreshStatus() {
     $('#interval').textContent = s.connect.interval_s ? `${s.connect.interval_s} s` : 'manual';
     $('#last-upload').textContent = ago(s.connect.last_upload_ago_s);
     $('#version').textContent = s.version;
+    $('#printer-line').hidden = !s.printer;
+    if (s.printer) {
+      const p = s.printer;
+      const job = p.phase === 'printing' || p.phase === 'paused'
+        ? ` ${Math.round(p.progress)} %${p.file ? ` · ${p.file}` : ''}${p.time_left_s ? ` · ${duration(p.time_left_s)} left` : ''}`
+        : '';
+      $('#printer-state').textContent = p.reachable ? `${p.phase}${job}` : `unreachable${p.error ? ` (${p.error})` : ''}`;
+    }
+    if (s.connect.uploads_paused) $('#connect-state').textContent = 'paused (printer idle)';
     lightOn = !!s.light;
     $('#light-icon').src = lightOn ? 'icons/light-on-icon.svg' : 'icons/light-off-icon.svg';
     const photo = $('#photo');
@@ -506,7 +530,8 @@ async function refreshStatus() {
 
 // ---------- routing ----------
 const ROUTES = { camera: () => renderForm('camera'), connect: () => renderForm('connect'),
-                 network: () => renderForm('network'), storage: () => renderForm('storage'),
+                 network: () => renderForm('network'), printer: () => renderForm('printer'),
+                 storage: () => renderForm('storage'),
                  system: renderSystem };
 
 async function route() {

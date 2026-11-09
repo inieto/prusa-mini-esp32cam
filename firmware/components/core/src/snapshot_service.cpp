@@ -160,6 +160,17 @@ void SnapshotService::take_and_publish(Millis now) {
     return;
   }
 
+  const bool paused = only_while_printing_ && printer_ &&
+                      !activity_.active(printer_->job().phase, now);
+  {
+    std::lock_guard lock(mutex_);
+    status_.uploads_paused = paused;
+  }
+  if (paused) {
+    scheduler_.schedule_after(now);  // not a failure: the recovery ladder is left alone
+    return;
+  }
+
   const Result<void> upload = deps_.connect.upload_snapshot(*frame);
   if (!upload) {
     record_failure(now, upload.error());

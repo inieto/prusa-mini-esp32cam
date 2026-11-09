@@ -8,6 +8,7 @@ set(CORE_SOURCES
     src/frame_pool.cpp
     src/ports.cpp
     src/prusa_connect.cpp
+    src/prusalink.cpp
     src/recovery.cpp
     src/scheduler.cpp
     src/printer.cpp

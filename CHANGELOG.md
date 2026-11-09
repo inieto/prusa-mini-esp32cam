@@ -45,6 +45,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
   (F6), and a timelapse can record always or only while printing (one folder per print). New
   *Storage* tab with the settings and a file browser to open, download and delete files
   (ADR-0011).
+- PrusaLink: with the printer address and its PrusaLink password (*Printer* tab), the camera
+  shows the printer state, progress and file, records the timelapse per print and can upload to
+  PrusaConnect only while printing (and 5 min after). An unreachable printer never stops the
+  uploads (ADR-0012).
 - `tools/soak.py`: long-running reliability check against a real camera (upload success
   rate, reboots, RSSI, minimum heap) with a PASS/FAIL verdict.
 - Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
@@ -73,4 +77,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Pending
 - 48 h soak against PrusaConnect on hardware.
-- PrusaLink, MQTT/Home Assistant, MJPEG stream.
+- MQTT/Home Assistant, MJPEG stream.

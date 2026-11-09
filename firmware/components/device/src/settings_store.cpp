@@ -128,6 +128,25 @@ core::Result<void> SettingsStore::save_camera(const core::CameraSettings& camera
   return nvs.commit();
 }
 
+PrinterSettings SettingsStore::load_printer() const {
+  Nvs nvs("link", NVS_READONLY);
+  PrinterSettings p;
+  p.host = nvs.str("host");
+  p.user = nvs.str("user", p.user);
+  p.password = nvs.str("pass");
+  p.upload_only_while_printing = nvs.str("only_print") == "1";
+  return p;
+}
+
+core::Result<void> SettingsStore::save_printer(const PrinterSettings& p) {
+  Nvs nvs("link", NVS_READWRITE);
+  nvs.set("host", p.host);
+  nvs.set("user", p.user);
+  nvs.set("pass", p.password);
+  nvs.set("only_print", p.upload_only_while_printing ? "1" : "0");
+  return nvs.commit();
+}
+
 core::StorageSettings SettingsStore::load_storage() const {
   Nvs nvs("storage", NVS_READONLY);
   StorageBlob blob{};

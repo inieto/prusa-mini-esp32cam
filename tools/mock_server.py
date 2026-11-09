@@ -35,6 +35,8 @@ state = {
     "network": {"ssid": "nietogiardinieri", "password_set": True, "hostname": "prusa-esp32cam"},
     "coredump": {"size": 65536 - 4096, "task": "httpd", "pc": "0x400d1234",
                  "reason": "LoadProhibited"},  # set to None to simulate a clean device
+    "printer": {"host": "192.168.0.50", "user": "maker", "password_set": True,
+                "upload_only_while_printing": True},
     "storage": {"log_to_sd": True, "timelapse": "printing", "timelapse_interval_s": 60},
     "sd": {  # fake card: folders are dicts, files are sizes
         "logs": {"2026-11-08.log": 18_200, "2026-11-09.log": 4_096},
@@ -110,6 +112,9 @@ class Handler(SimpleHTTPRequestHandler):
                             "last_error": None, "frame_seq": state["seq"], "frame_age_s": 12},
                 "wifi": {"ssid": "nietogiardinieri", "ip": "192.168.0.61", "rssi": -52},
                 "heap": {"internal_free": 101_000, "internal_min": 72_000, "psram_free": 3_100_000},
+                "printer": {"reachable": True, "error": "", "phase": "printing",
+                            "file": "Benchy 0.2mm PLA.bgcode", "progress": 45.5,
+                            "time_left_s": 3120} if state["printer"]["host"] else None,
                 "firmware": {"partition": "ota_0", "pending_verify": False, "rolled_back": None},
                 "coredump": state["coredump"],
                 "resets": [{"reason": "power-on", "uptime_s": 0},

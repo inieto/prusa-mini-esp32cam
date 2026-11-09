@@ -2,8 +2,11 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+
+#include "core/time.hpp"
 
 namespace core {
 
@@ -17,6 +20,20 @@ struct PrinterJob {
   std::string file;         // display name of the file being printed
   float progress = 0;       // 0..100
   uint32_t time_left_s = 0;
+};
+
+// "Is the printer doing something worth watching?" Used to upload to PrusaConnect only while
+// printing. Fails open: an unknown state (PrusaLink not configured or unreachable) counts as
+// active so a broken link never silences the camera. Stays active for `grace` after a print
+// ends so the finished part still gets photographed.
+class PrintActivity {
+ public:
+  explicit PrintActivity(Millis grace = Millis{5 * 60'000}) : grace_(grace) {}
+  bool active(PrinterPhase phase, Millis now);
+
+ private:
+  Millis grace_;
+  std::optional<Millis> last_active_;
 };
 
 // Latest known printer state; thread-safe, never blocks (served from a cache).
