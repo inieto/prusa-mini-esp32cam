@@ -1,14 +1,14 @@
-# ADR-XXXX: <título corto en imperativo o sustantivo>
+# ADR-XXXX: <short title, imperative or noun phrase>
 
-- Estado: propuesta | aceptada | reemplazada por ADR-YYYY · AAAA-MM-DD
+- Status: proposed | accepted | superseded by ADR-YYYY · YYYY-MM-DD
 
-## Contexto
-Qué problema hay, qué restricciones aplican (RAM, flash, energía, seguridad, compatibilidad con
-PrusaConnect) y qué evidencia lo respalda (tests, mediciones, hallazgos B*/S*/F*).
+## Context
+What the problem is, which constraints apply (RAM, flash, power, security, PrusaConnect
+compatibility) and what evidence backs it (tests, measurements, B*/S*/F* findings).
 
-## Decisión
-Qué se decide, en concreto. Si hay alternativas descartadas, una línea por cada una y por qué.
+## Decision
+What is decided, concretely. If alternatives were rejected, one line each and why.
 
-## Consecuencias
-+ Lo que se gana.
-− Lo que cuesta o queda pendiente.
+## Consequences
++ What we gain.
+− What it costs or leaves pending.

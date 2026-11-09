@@ -1,15 +1,15 @@
-# ADR-0007: UI web vanilla con estética Prusa, embebida gzip
+# ADR-0007: Vanilla web UI with the Prusa look, embedded gzipped
 
-- Estado: aceptada · 2026-09-27
+- Status: accepted · 2026-09-27
 
-## Decisión
-HTML + CSS + JS con módulos ES, sin jQuery ni frameworks ni Node en el build. Tokens visuales
-tomados de la UI original de Prusa (naranja `#FA6831`, grises `#2A2A2A/#797979/#F5F5F5`,
-botones con borde que se vuelven naranja en hover, navegación subrayada en naranja). Se embebe
-comprimida con gzip vía `EMBED_FILES`. Datos siempre con `textContent`.
+## Decision
+HTML + CSS + JS with ES modules, no jQuery, no frameworks, no Node in the build. Visual tokens
+taken from Prusa's original UI (orange `#FA6831`, greys `#2A2A2A/#797979/#F5F5F5`, outlined
+buttons that turn orange on hover, navigation underlined in orange). Embedded gzip-compressed via
+`EMBED_FILES`. Data always rendered with `textContent`.
 
-## Consecuencias
-+ ~20 KB en flash (jQuery solo pesaba 87 KB). + Sin cadena de build JS que mantener.
-− Componentes UI escritos a mano (pocos).
-− Íconos/estilos derivados de un proyecto GPL-3.0 → este proyecto es GPL-3.0. El logo de Prusa
-  es marca registrada: uso personal; reemplazar si se distribuye.
+## Consequences
++ ~20 KB of flash (jQuery alone was 87 KB). + No JS build chain to maintain.
+− UI components written by hand (there are few).
+− Icons/styles derived from a GPL-3.0 project → this project is GPL-3.0. The Prusa logo is a
+  registered trademark: personal use; replace it if distributed.

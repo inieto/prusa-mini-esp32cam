@@ -1,18 +1,18 @@
-# ADR-0003: Actores con dueño único y FramePool con referencias contadas
+# ADR-0003: Single-owner actors and a reference-counted FramePool
 
-- Estado: aceptada · 2026-09-27
+- Status: accepted · 2026-09-27
 
-## Contexto
-Bugs B4, B7–B10 de v1.1.2: semáforos no liberados, frame buffer del driver leído por la web
-mientras otra tarea lo devolvía, sensor reconfigurado en paralelo a una captura.
+## Context
+Bugs B4, B7–B10 in v1.1.2: semaphores never released, the driver's frame buffer read by the web
+server while another task was returning it, the sensor reconfigured in parallel with a capture.
 
-## Decisión
-Cada recurso (cámara, red, SD, cliente Connect) pertenece a una tarea que procesa una cola de
-mensajes. Los frames se copian a un `FramePool` de slots pre-reservados en PSRAM y se comparten
-como `FrameRef` inmutables con conteo atómico; el `fb` del driver se devuelve inmediatamente.
-Los handlers HTTP no llaman drivers: envían un mensaje con timeout o leen el último `FrameRef`.
+## Decision
+Each resource (camera, network, SD, Connect client) belongs to one task that processes a message
+queue. Frames are copied into a `FramePool` of slots preallocated in PSRAM and shared as immutable
+`FrameRef`s with an atomic count; the driver's `fb` is returned immediately. HTTP handlers do not
+call drivers: they send a message with a timeout or read the latest `FrameRef`.
 
-## Consecuencias
-+ Sin locks en el camino de lectura; imposible liberar un frame en uso.
-+ Sin heap en caliente (slots fijos).
-− Una copia extra por foto (~20–150 KB a PSRAM, < 5 ms): aceptable a 1 foto cada 10 s o más.
+## Consequences
++ No locks on the read path; a frame in use cannot be freed.
++ No heap allocation on the hot path (fixed slots).
+− One extra copy per photo (~20–150 KB into PSRAM, < 5 ms): fine at one photo every 10 s or more.

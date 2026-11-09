@@ -1,163 +1,168 @@
-# Arquitectura — PrusaCam byClaude
+# Architecture — PrusaCam byClaude
 
-Firmware nuevo para **ESP32-CAM AI Thinker (ESP32-D0WDQ6 + OV2640 + 4 MB PSRAM + 4 MB flash)**
-cuyo objetivo principal es publicar snapshots en **PrusaConnect** de forma confiable, segura y
-observable. Reemplaza a Prusa-Firmware-ESP32-Cam v1.1.2; los IDs S*, B*, F*
-remiten a los hallazgos de una auditoría de ese firmware (todavía no publicada en el repo).
+New firmware for the **AI Thinker ESP32-CAM (ESP32-D0WDQ6 + OV2640 + 4 MB PSRAM + 4 MB flash)**
+whose main goal is to publish snapshots to **PrusaConnect** reliably, securely and observably.
+It replaces Prusa-Firmware-ESP32-Cam v1.1.2; the S*, B*, F* IDs refer to findings from an audit of
+that firmware (not yet published in the repo).
 
-## 1. Objetivos y no-objetivos
+## 1. Goals and non-goals
 
-**Objetivos (en orden de prioridad)**
-1. Subir snapshots a PrusaConnect sin cortes ni reinicios evitables (≥ 99 % de subidas OK en 48 h).
-2. Seguro por defecto en una LAN doméstica (sin endpoints anónimos que cambien estado).
-3. Diagnosticable sin cable serie: métricas, historial de reinicios, core dumps.
-4. Extensible: agregar un destino (MQTT, RTSP, timelapse) no toca el núcleo.
-5. La lógica se prueba en la Mac, sin hardware.
+**Goals (in priority order)**
+1. Upload snapshots to PrusaConnect without gaps or avoidable reboots (≥ 99 % successful uploads over 48 h).
+2. Secure by default on a home LAN (no anonymous endpoints that change state).
+3. Diagnosable without a serial cable: metrics, reboot history, core dumps.
+4. Extensible: adding a destination (MQTT, RTSP, timelapse) does not touch the core.
+5. The logic is tested on the Mac, without hardware.
 
-**No-objetivos**
-- Detección de fallas por visión en el dispositivo (no hay RAM/CPU; queda como puerto futuro remoto).
-- Soportar otras placas en v1 (el diseño lo permite vía `boards/`, pero no se prueba).
-- Compatibilidad de configuración con v1.1.2 (se reconfigura una vez).
+**Non-goals**
+- On-device vision-based failure detection (no RAM/CPU for it; left as a future remote port).
+- Supporting other boards in v1 (the design allows it via `boards/`, but it is not tested).
+- Configuration compatibility with v1.1.2 (reconfigure once).
 
-## 2. Restricciones de la plataforma
+## 2. Platform constraints
 
-| Recurso | Disponible | Implicancia de diseño |
+| Resource | Available | Design implication |
 |---|---|---|
-| RAM interna | ~320 KB, ~150 KB libres con WiFi | TLS, WiFi y stacks van acá → **cero heap en caliente**; buffers de mbedTLS en PSRAM |
-| PSRAM | 4 MB (lenta, sin DMA para WiFi) | frames JPEG y pool de buffers |
-| CPU | 2× Xtensa 240 MHz | core 0: WiFi/LwIP; core 1: aplicación |
-| Flash | 4 MB | 2 slots OTA de 1,875 MB + NVS + coredump |
-| Energía | alimentación marginal (cables largos) | evitar picos: sin escaneo WiFi periódico, TX power configurable |
+| Internal RAM | ~320 KB, ~150 KB free with WiFi | TLS, WiFi and stacks live here → **no heap on the hot path**; mbedTLS buffers in PSRAM |
+| PSRAM | 4 MB (slow, no DMA for WiFi) | JPEG frames and the buffer pool |
+| CPU | 2× Xtensa 240 MHz | core 0: WiFi/LwIP; core 1: application |
+| Flash | 4 MB | 2 OTA slots of 1.875 MB + NVS + coredump |
+| Power | marginal supply (long wires) | avoid spikes: no periodic WiFi scans, configurable TX power |
 
-## 3. Vista de capas (hexagonal)
+## 3. Layered view (hexagonal)
 
 ```
              ┌──────────────────────────────────────────────┐
-             │                 core (C++23 puro)            │
-             │  domain/   valores, políticas, reglas         │
-             │  app/      casos de uso (orquestan puertos)   │
-             │  ports/    interfaces que el núcleo NECESITA  │
-             │  protocol/ PrusaConnect, EXIF (bytes puros)   │
+             │                core (pure C++23)             │
+             │  domain/   values, policies, rules           │
+             │  app/      use cases (orchestrate ports)     │
+             │  ports/    interfaces the core NEEDS         │
+             │  protocol/ PrusaConnect, EXIF (pure bytes)   │
              └───────────────▲──────────────────▲───────────┘
-                             │ implementan      │ implementan
+                             │ implement        │ implement
    ┌─────────────────────────┴──┐        ┌──────┴──────────────────────┐
-   │ adapters ESP-IDF (device)  │        │ fakes (test/host)            │
+   │ ESP-IDF adapters (device)  │        │ fakes (test/host)            │
    │ camera_ov2640, http_client │        │ FakeCamera, FakeClock,       │
    │ wifi, nvs_store, sd, httpd │        │ FakeSnapshotSink, …          │
    └────────────────────────────┘        └──────────────────────────────┘
                  ▲
-          main/ (composition root: crea actores, conecta puertos, arranca)
+          main/ (composition root: creates actors, wires ports, starts)
 ```
 
-Regla de dependencias: `core` **no incluye nada de ESP-IDF ni FreeRTOS**. Compila con
-Apple clang en la Mac y con GCC Xtensa en el dispositivo. Solo `adapters/` y `main/` conocen la
-plataforma.
+Dependency rule: `core` **includes nothing from ESP-IDF or FreeRTOS**. It compiles with Apple
+clang on the Mac and with Xtensa GCC on the device. Only `adapters/` and `main/` know the platform.
 
-## 4. Modelo de concurrencia: actores
+## 4. Concurrency model: actors
 
-La causa raíz de los bugs más graves de v1.1.2 (B4, B7–B10) fue que varias tareas compartían el
-frame buffer y el sensor. Acá cada recurso tiene **un único dueño** (una tarea con su cola) y el
-resto le manda mensajes.
+The root cause of v1.1.2's worst bugs (B4, B7–B10) was several tasks sharing the frame buffer and
+the sensor. Here every resource has **a single owner** (a task with its queue) and everyone else
+sends it messages.
 
-| Actor (tarea) | Core | Dueño de | Recibe |
+| Actor (task) | Core | Owns | Receives |
 |---|---|---|---|
-| `CameraActor` | 1 | driver `esp32-camera`, sensor, LED flash | `Capture`, `ApplySettings` |
-| `SnapshotService` | 1 | agenda de capturas, `FramePool` | ticks, `TriggerNow`, eventos de red |
-| `ConnectUplink` | 1 | cliente HTTPS a PrusaConnect (keep-alive) | `Publish(frame)`, `SyncInfo` |
-| `NetworkActor` | 0 | WiFi STA/AP, NTP, mDNS | eventos WiFi, órdenes de recuperación |
-| `StorageActor` | 1 | tarjeta SD, log a disco | `AppendLog`, `WriteFile`, `Erase` |
-| `httpd` (de ESP-IDF) | 1 | sockets HTTP | requests; **nunca bloquea** más que un `send` a una cola |
+| `CameraActor` | 1 | `esp32-camera` driver, sensor, flash LED | `Capture`, `ApplySettings` |
+| `SnapshotService` | 1 | capture schedule, `FramePool` | ticks, `TriggerNow`, network events |
+| `ConnectUplink` | 1 | HTTPS client to PrusaConnect (keep-alive) | `Publish(frame)`, `SyncInfo` |
+| `NetworkActor` | 0 | WiFi STA/AP, NTP, mDNS | WiFi events, recovery orders |
+| `StorageActor` | 1 | SD card, log to disk | `AppendLog`, `WriteFile`, `Erase` |
+| `httpd` (ESP-IDF's) | 1 | HTTP sockets | requests; **never blocks** longer than a `send` to a queue |
 
 ### 4.1 Frames: `FramePool` + `FrameRef`
-- Al arrancar se reservan N slots en PSRAM (N=3, tamaño = peor JPEG a la resolución configurada).
-- `CameraActor` captura, **copia** el JPEG a un slot (anteponiendo EXIF) y devuelve el `fb`
-  al driver en el acto → el driver nunca queda con buffers prestados.
-- Los consumidores reciben un `FrameRef`: puntero inmutable con **conteo de referencias atómico**;
-  el slot vuelve al pool cuando se destruye la última referencia (RAII). Subida, web y SD pueden
-  leer el mismo frame en paralelo sin locks y sin uso-después-de-liberar.
-- Si no hay slots libres, la captura se saltea (métrica `frames_dropped`) en vez de bloquear.
+- At boot N slots are reserved in PSRAM (N=3, size = worst-case JPEG at the configured resolution).
+- `CameraActor` captures, **copies** the JPEG into a slot (prepending EXIF) and returns the `fb`
+  to the driver right away → the driver never has buffers on loan.
+- Consumers receive a `FrameRef`: an immutable pointer with an **atomic reference count**; the
+  slot goes back to the pool when the last reference is destroyed (RAII). Upload, web and SD can
+  read the same frame in parallel without locks and without use-after-free.
+- If no slot is free, the capture is skipped (`frames_dropped` metric) instead of blocking.
 
-## 5. Flujo principal: snapshot → PrusaConnect
+## 5. Main flow: snapshot → PrusaConnect
 
 ```
-tick (1 s) ──► SnapshotScheduler.due(now)? ──no──► fin
-                     │ sí
+tick (1 s) ──► SnapshotScheduler.due(now)? ──no──► done
+                     │ yes
                      ▼
            CameraActor.Capture ──► FrameRef ──► ConnectUplink.Publish
                                           │            │
                                           │            ├─ 204/200 → policy.onSuccess
-                                          │            ├─ 401/403 → estado "token inválido" (sin reintento)
-                                          │            └─ red/TLS/5xx → Backoff exponencial con jitter
-                                          └──► (opcional) timelapse en SD
+                                          │            ├─ 401/403 → "token rejected" state (no retry)
+                                          │            └─ network/TLS/5xx → exponential backoff with jitter
+                                          └──► (optional) timelapse to SD
 ```
 
-- El intervalo sale del `trigger_scheme` que el usuario elige **en la web de PrusaConnect**
-  (respuesta de `PUT /c/info`); el valor local es solo el default.
-- `ConnectivityRecovery` decide escalar: *reintentar → reconectar WiFi → reiniciar*, con umbrales
-  en minutos sin **ningún** éxito de red. Un fallo del backend nunca corta el WiFi por sí solo (B1).
+- The interval comes from the `trigger_scheme` the user picks **in the PrusaConnect web UI**
+  (response to `PUT /c/info`); the local value is only the default.
+- `ConnectivityRecovery` decides when to escalate: *retry → reconnect WiFi → reboot*, with
+  thresholds in minutes without **any** network success. A backend failure never drops WiFi by
+  itself (B1). See ADR-0004.
+- If the configured WiFi is unreachable for 3 minutes, the setup AP comes up alongside the station
+  so the camera can be reached and fixed without a serial cable (ADR-0009).
 
-## 6. Configuración
+## 6. Configuration
 
-- Esquema tipado único (`core/domain/config.hpp`): cada campo con rango, default y si requiere
-  reinicio. La API REST y la UI se validan contra el mismo esquema.
-- Persistencia en **NVS** (no emulación EEPROM) con `schema_version` y migraciones explícitas.
-- Secretos (clave WiFi, token, clave web) nunca salen por la API: se muestran como `"set": true`.
+- A single typed schema (`core/domain/config.hpp`): each field with range, default and whether it
+  needs a reboot. The REST API and the UI validate against the same schema.
+- Persisted in **NVS** (no EEPROM emulation) with `schema_version` and explicit migrations.
+- Secrets (WiFi password, token, web password) never leave through the API: they show as `"set": true`.
 
-## 7. Seguridad (modelo de amenazas: LAN doméstica + vecinos al alcance del WiFi)
+## 7. Security (threat model: home LAN + neighbours within WiFi range)
 
-- **Primer arranque**: AP de servicio con clave **única por dispositivo** (derivada de la MAC +
-  sal, impresa en el log serie) y en `192.168.4.1`; se cierra al configurar el WiFi.
-- **Web**: login con usuario/clave → cookie de sesión `HttpOnly; SameSite=Strict`. Toda
-  mutación es `POST`/`PUT` con `Content-Type: application/json` (CSRF bloqueado por SameSite +
-  preflight). Clientes automáticos usan `Authorization: Bearer <api-token>`.
-- **Sin endpoints anónimos** salvo `/login` y los assets estáticos de la pantalla de login.
-- **OTA**: `POST /api/v1/ota` autenticado; imagen verificada por firma (sin quemar eFuses) y
-  **rollback automático** si la nueva versión no confirma salud en 60 s.
-- **TLS**: bundle de CAs de ESP-IDF (cubre la transición de Let's Encrypt, S7).
-- UI sin `innerHTML` con datos: todo por `textContent` (XSS por construcción, S4).
+- **First boot**: service AP with a **per-device** password (derived from the MAC + salt, printed
+  on the serial log) at `192.168.4.1`; it closes once WiFi is configured. It also comes back as a
+  fallback when the configured WiFi is unreachable (ADR-0009).
+- **Web**: username/password login → `HttpOnly; SameSite=Strict` session cookie. Every mutation
+  is `POST`/`PUT` with `Content-Type: application/json` (CSRF blocked by SameSite + preflight).
+  Automated clients use `Authorization: Bearer <api-token>`.
+- **No anonymous endpoints** except `/login` and the static assets of the login screen.
+- **OTA**: authenticated `POST /api/v1/ota`; image signature-verified (without burning eFuses)
+  and **automatic rollback** if the new version does not confirm health within 60 s.
+- **TLS**: ESP-IDF CA bundle (covers the Let's Encrypt transition, S7).
+- UI never uses `innerHTML` with data: everything via `textContent` (XSS-safe by construction, S4).
 
-## 8. Observabilidad
+## 8. Observability
 
-- `GET /api/v1/status`: uptime, heap interno/PSRAM (actual y mínimo), RSSI, subidas OK/fallidas,
-  último error, motivo de los últimos 8 reinicios (en NVS), versión.
-- Log en **buffer circular en RAM** (visible en la web al instante) + volcado a SD por lotes
-  (cada 10 s o 4 KB), con rotación que **borra** los archivos viejos (F6).
-- Partición `coredump`: si hay un panic, el siguiente arranque lo reporta y se descarga por la API.
+- `GET /api/v1/status`: uptime, internal/PSRAM heap (current and minimum), RSSI, successful/failed
+  uploads, last error, reason for the last 8 reboots (in NVS), version.
+- Log in a **RAM ring buffer** (visible instantly in the web UI) + batched dump to SD (every 10 s
+  or 4 KB), with rotation that **deletes** old files (F6).
+- WiFi diagnostics in the log: RSSI on every connection (warning below −75 dBm) and named
+  disconnect reasons.
+- `coredump` partition: after a panic, the next boot reports it and it can be downloaded via the API.
 
 ## 9. Web UI
 
-- Estética Prusa (tokens de color/tipografía de la UI original, ver `web/src/styles.css`).
-- Vanilla JS con módulos ES, sin jQuery ni frameworks (sin build de Node); se sirve gzip desde
-  flash con `Cache-Control` por hash de contenido.
-- Pantallas: Snapshot/estado · Cámara · PrusaConnect · Red · Sistema (logs, OTA, reinicios).
+- Prusa look (colour/typography tokens from the original UI, see `web/src/styles.css`).
+- Vanilla JS with ES modules, no jQuery or frameworks (no Node build); served gzipped from flash
+  with a content-hash `ETag` (UI bundle hash + firmware build hash).
+- Screens: Snapshot/status · Camera · PrusaConnect · Network · System (logs, OTA, reboots).
 
-## 10. Estructura del repo
+## 10. Repository layout
 
 ```
 firmware-byclaude/
-  docs/ARCHITECTURE.md, docs/adr/        decisiones
-  firmware/                              proyecto ESP-IDF
+  docs/ARCHITECTURE.md, docs/adr/        decisions
+  firmware/                              ESP-IDF project
     main/                                composition root
-    components/core/                     núcleo portable (domain, app, ports, protocol)
-    components/adapters/…                implementaciones ESP-IDF (se agregan por corte)
-    boards/ai_thinker.hpp                pines y capacidades
+    components/core/                     portable core (domain, app, ports, protocol)
+    components/device/                   ESP-IDF implementations + HTTP server
+    boards/ai_thinker.hpp                pins and capabilities
     partitions.csv, sdkconfig.defaults
   web/src/                               UI (HTML/CSS/JS)
-  test/host/                             tests del núcleo en la Mac (GoogleTest)
-  tools/                                 scripts (embed web, flash, etc.)
+  test/host/                             core tests on the Mac (GoogleTest)
+  tools/                                 scripts (web packing, mock server, etc.)
 ```
 
-## 11. Estrategia de pruebas
+## 11. Test strategy
 
-1. **Host (Mac)**: `core` completo con GoogleTest + fakes; corre en segundos, en cada commit.
-2. **Integración**: un fake de PrusaConnect en Python en la Mac; la cámara real apunta a él
-   (hostname configurable) para probar errores 401/503/timeouts reproducibles.
-3. **En hardware**: soak de 48 h contra PrusaConnect real, midiendo `/api/v1/status`.
+1. **Host (Mac)**: the whole `core` with GoogleTest + fakes; runs in seconds, on every commit.
+2. **Integration**: a fake PrusaConnect in Python on the Mac; the real camera points at it
+   (configurable hostname) to reproduce 401/503/timeouts.
+3. **On hardware**: 48 h soak against the real PrusaConnect, watching `/api/v1/status`.
 
-## 12. Plan de cortes verticales
+## 12. Vertical slices
 
-1. **Snapshot → PrusaConnect** con config por Kconfig/NVS, métricas y logs. *(mínimo útil)*
-2. Web: login, estado, snapshot, configuración de cámara/Connect/red.
-3. OTA con rollback + coredump.
-4. SD: logs persistentes, timelapse, navegador de archivos.
-5. PrusaLink (subir solo mientras imprime), MQTT/Home Assistant, stream.
+1. **Snapshot → PrusaConnect** with Kconfig/NVS config, metrics and logs. *(minimum useful)*
+2. Web: login, status, snapshot, camera/Connect/network settings.
+3. OTA with rollback + coredump.
+4. SD: persistent logs, timelapse, file browser.
+5. PrusaLink (upload only while printing), MQTT/Home Assistant, stream.

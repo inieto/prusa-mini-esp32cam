@@ -76,9 +76,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "setup" and method == "POST":
             body = self.read_json()
             if state["user"] is not None:
-                return self.send_json({"error": "configuración inicial cerrada"}, HTTPStatus.UNAUTHORIZED)
+                return self.send_json({"error": "initial setup is closed"}, HTTPStatus.UNAUTHORIZED)
             if len(body.get("password", "")) < 8:
-                return self.send_json({"error": "mínimo 8 caracteres"}, HTTPStatus.BAD_REQUEST)
+                return self.send_json({"error": "at least 8 characters"}, HTTPStatus.BAD_REQUEST)
             state["user"] = (body["username"], body["password"])
             state["session"] = "mock"
             return self.send_json({"ok": True}, headers=cookie)
@@ -87,7 +87,7 @@ class Handler(SimpleHTTPRequestHandler):
             if state["user"] == (body.get("username"), body.get("password")):
                 state["session"] = "mock"
                 return self.send_json({"ok": True}, headers=cookie)
-            return self.send_json({"error": "usuario o contraseña incorrectos"}, HTTPStatus.UNAUTHORIZED)
+            return self.send_json({"error": "wrong username or password"}, HTTPStatus.UNAUTHORIZED)
         if not self.authed():
             return self.send_json({"error": "login required"}, HTTPStatus.UNAUTHORIZED)
 

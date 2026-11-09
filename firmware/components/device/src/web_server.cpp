@@ -258,12 +258,12 @@ esp_err_t WebServer::login_or_setup(httpd_req_t* req, bool setup) {
   if (!session) {
     switch (session.error().code) {
       case core::Errc::Busy:
-        return send_error(req, "429 Too Many Requests", "demasiados intentos, esperá 30 s");
+        return send_error(req, "429 Too Many Requests", "too many attempts, wait 30 s");
       case core::Errc::InvalidArgument:
-        return send_error(req, "400 Bad Request", "usuario o contraseña inválidos (mínimo 8 caracteres)");
+        return send_error(req, "400 Bad Request", "invalid username or password (at least 8 characters)");
       default:
-        return send_error(req, "401 Unauthorized", setup ? "configuración inicial cerrada"
-                                                         : "usuario o contraseña incorrectos");
+        return send_error(req, "401 Unauthorized", setup ? "initial setup is closed"
+                                                         : "wrong username or password");
     }
   }
   const std::string cookie = Auth::session_cookie(*session);
@@ -347,10 +347,10 @@ esp_err_t WebServer::camera_config(httpd_req_t* req, bool update) {
     const auto body = read_json_body(req);
     if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
     const auto merged = core::merge_camera_settings(settings, *body);
-    if (!merged) return send_error(req, "400 Bad Request", "valor inválido");
+    if (!merged) return send_error(req, "400 Bad Request", "invalid value");
     settings = *merged;
     if (auto r = d_.store.save_camera(settings); !r) {
-      return send_error(req, "500 Internal Server Error", "no se pudo guardar");
+      return send_error(req, "500 Internal Server Error", "could not save");
     }
     d_.camera.request_settings(settings);  // applied by the capture task before its next frame
   }
@@ -368,13 +368,13 @@ esp_err_t WebServer::connect_config(httpd_req_t* req, bool update) {
     const std::string token = json_string(j.get(), "token", &has_token);
     const std::string host = json_string(j.get(), "hostname", &has_host);
     if (has_token && !token.empty() && !core::connect::is_valid_token(token)) {
-      return send_error(req, "400 Bad Request", "el token tiene que tener 20 caracteres alfanuméricos");
+      return send_error(req, "400 Bad Request", "the token must be 20 alphanumeric characters");
     }
-    if (has_host && !is_valid_hostname(host)) return send_error(req, "400 Bad Request", "servidor inválido");
+    if (has_host && !is_valid_hostname(host)) return send_error(req, "400 Bad Request", "invalid server");
     if (has_token) creds.token = token;
     if (has_host) creds.host = host;
     if (auto r = d_.store.save_connect(creds); !r) {
-      return send_error(req, "500 Internal Server Error", "no se pudo guardar");
+      return send_error(req, "500 Internal Server Error", "could not save");
     }
     d_.connect.set_credentials(creds);
     d_.service.request_info_sync();
@@ -398,17 +398,17 @@ esp_err_t WebServer::network_config(httpd_req_t* req, bool update) {
     const std::string ssid = json_string(j.get(), "ssid", &has_ssid);
     const std::string pass = json_string(j.get(), "password", &has_pass);
     const std::string host = json_string(j.get(), "hostname", &has_host);
-    if (has_ssid && (ssid.empty() || ssid.size() > 32)) return send_error(req, "400 Bad Request", "SSID inválido");
+    if (has_ssid && (ssid.empty() || ssid.size() > 32)) return send_error(req, "400 Bad Request", "invalid SSID");
     if (has_pass && !pass.empty() && (pass.size() < 8 || pass.size() > 63)) {
-      return send_error(req, "400 Bad Request", "la clave WiFi tiene que tener entre 8 y 63 caracteres");
+      return send_error(req, "400 Bad Request", "the WiFi password must be 8 to 63 characters");
     }
     if (has_host && (!is_valid_hostname(host) || host.find('.') != std::string::npos)) {
-      return send_error(req, "400 Bad Request", "nombre inválido (letras, números y guiones)");
+      return send_error(req, "400 Bad Request", "invalid name (letters, digits and hyphens)");
     }
     if (has_ssid) wifi.ssid = ssid;
     if (has_pass) wifi.password = pass;
     if (has_host) wifi.hostname = host;
-    if (auto r = d_.store.save_wifi(wifi); !r) return send_error(req, "500 Internal Server Error", "no se pudo guardar");
+    if (auto r = d_.store.save_wifi(wifi); !r) return send_error(req, "500 Internal Server Error", "could not save");
     reboot_required = true;
   }
   JsonPtr j(cJSON_CreateObject());

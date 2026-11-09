@@ -1,15 +1,15 @@
-# ADR-0002: Núcleo hexagonal portable (core sin ESP-IDF)
+# ADR-0002: Portable hexagonal core (core without ESP-IDF)
 
-- Estado: aceptada · 2026-09-27
+- Status: accepted · 2026-09-27
 
-## Decisión
-`components/core` contiene dominio, casos de uso, puertos (interfaces abstractas) y protocolos,
-y **no incluye headers de ESP-IDF/FreeRTOS**. Los adaptadores implementan los puertos. Se usa
-polimorfismo dinámico solo en los puertos (≈ una llamada virtual por operación de I/O, costo
-despreciable); dentro del núcleo, valores y funciones puras.
+## Decision
+`components/core` holds the domain, use cases, ports (abstract interfaces) and protocols, and
+**includes no ESP-IDF/FreeRTOS headers**. Adapters implement the ports. Dynamic polymorphism is
+used only at the ports (≈ one virtual call per I/O operation, negligible cost); inside the core,
+values and pure functions.
 
-## Consecuencias
-+ Todo el comportamiento (políticas, reintentos, protocolo, EXIF, validación) se testea en la Mac.
-+ Cambiar un destino/placa no toca el núcleo.
-− Hay que resistir la tentación de "abstraer por si acaso": un puerto nuevo solo cuando hay
-  un segundo implementador real (fake de test cuenta).
+## Consequences
++ All behaviour (policies, retries, protocol, EXIF, validation) is tested on the Mac.
++ Changing a destination or a board does not touch the core.
+− Resist "abstracting just in case": a new port only when there is a second real implementer
+  (a test fake counts).

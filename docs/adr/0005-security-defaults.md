@@ -1,20 +1,21 @@
-# ADR-0005: Seguridad por defecto
+# ADR-0005: Secure by default
 
-- Estado: aceptada · 2026-09-27
+- Status: accepted · 2026-09-27 (amended by [ADR-0009](0009-fallback-setup-ap.md): the setup AP
+  also comes up when the configured WiFi is unreachable for 3 minutes)
 
-## Decisión
-- AP de servicio con clave por dispositivo y en 192.168.4.1; solo mientras no hay WiFi configurado
-  o por acción explícita (botón/serial).
-- Sin contraseña de fábrica: el primer usuario se crea desde la UI y solo durante los primeros
-  15 minutos tras el arranque (evita que alguien de la LAN "reclame" la cámara después).
-  Contraseña con PBKDF2-HMAC-SHA256 (4096 iteraciones, sal de 16 bytes del RNG por hardware);
-  5 intentos fallidos bloquean el login 30 s.
-- Web con login y cookie de sesión `HttpOnly; SameSite=Strict`; mutaciones solo por
-  `POST/PUT` JSON; API token Bearer para automatización. Ningún endpoint anónimo con datos.
-- OTA autenticada, verificada por firma (`SECURE_SIGNED_APPS_NO_SECURE_BOOT`) con rollback.
-- **No** se habilita Secure Boot ni Flash Encryption: queman eFuses de forma irreversible y un
-  error deja la placa inservible; el modelo de amenazas (LAN doméstica) no lo justifica.
-- Bundle de CAs de ESP-IDF para TLS.
+## Decision
+- Service AP with a per-device password at 192.168.4.1; only while no WiFi is configured or on
+  explicit action (button/serial).
+- No factory password: the first user is created from the UI and only during the first
+  15 minutes after boot (stops someone on the LAN from "claiming" the camera later).
+  Password stored with PBKDF2-HMAC-SHA256 (4096 iterations, 16-byte salt from the hardware RNG);
+  5 failed attempts lock the login for 30 s.
+- Web login with an `HttpOnly; SameSite=Strict` session cookie; mutations only via JSON
+  `POST/PUT`; Bearer API token for automation. No anonymous endpoint exposes data.
+- Authenticated OTA, signature-verified (`SECURE_SIGNED_APPS_NO_SECURE_BOOT`), with rollback.
+- Secure Boot and Flash Encryption are **not** enabled: they burn eFuses irreversibly and a
+  mistake bricks the board; the threat model (home LAN) does not justify them.
+- ESP-IDF CA bundle for TLS.
 
-## Consecuencias
-+ Cierra S1–S7. − Acceso físico por serie sigue permitiendo reflashear (aceptado).
+## Consequences
++ Closes S1–S7. − Physical serial access still allows reflashing (accepted).

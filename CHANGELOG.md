@@ -1,49 +1,55 @@
 # Changelog
 
-Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones según
-[SemVer](https://semver.org/lang/es/). Referencias como B1, S4 o F2 apuntan a los hallazgos sobre
-v1.1.2 (auditoría todavía no publicada en el repo).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
+[SemVer](https://semver.org/). References like B1, S4 or F2 point to the findings about v1.1.2
+(audit not yet published in the repo).
 
-## [Sin publicar]
+## [Unreleased]
 
-### Agregado
-- Servidor web en el dispositivo con la UI embebida (gzip, ~18 KB, servida con ETag).
-- Login sin contraseña de fábrica: el primer usuario se crea desde la web durante los primeros
-  15 minutos tras encender. PBKDF2-SHA256, cookie `HttpOnly; SameSite=Strict`, bloqueo de 30 s
-  tras 5 intentos fallidos (S1, S2, S5).
-- API REST `/api/v1`: estado, snapshot, luz, reinicio, logs, configuración de cámara,
-  PrusaConnect y red, escaneo WiFi. Nunca devuelve el token ni contraseñas (S6).
-- Diagnóstico sin cable serie: log en vivo en la web y historial de los últimos 8 reinicios con
-  el tiempo que venía encendida la cámara.
-- Techo de ganancia, exposición nocturna (AEC2) e intensidad/anticipo del flash configurables
-  (F2: imagen oscura).
-- El intervalo de fotos se toma del que se elige en la web de PrusaConnect (`trigger_scheme`).
-- AP de configuración `PrusaCam-XXXX` en 192.168.4.1 con clave única por dispositivo (B12, S2).
-- Al crear el usuario se pide repetir la contraseña. Los campos de contraseña del login tienen
-  un botón (ojito) para mostrar u ocultar lo escrito.
-- Núcleo portable con 46 tests en la Mac (GoogleTest + AddressSanitizer/UBSan).
-- `AGENTS.md` (y `CLAUDE.md` que lo importa) con invariantes de arquitectura, comandos y
-  convenciones para agentes de IA y contribuidores; índice y plantilla de ADRs.
+### Added
+- On-device web server with the embedded UI (gzip, ~18 KB, served with an ETag).
+- Login without a factory password: the first user is created from the web UI during the first
+  15 minutes after power-on. PBKDF2-SHA256, `HttpOnly; SameSite=Strict` cookie, 30 s lockout
+  after 5 failed attempts (S1, S2, S5).
+- REST API `/api/v1`: status, snapshot, light, reboot, logs, camera, PrusaConnect and network
+  settings, WiFi scan. It never returns the token or passwords (S6).
+- Diagnostics without a serial cable: live log in the web UI and history of the last 8 reboots
+  with how long the camera had been running.
+- Configurable gain ceiling, night exposure (AEC2) and flash intensity/lead time (F2: dark image).
+- The snapshot interval is taken from the one chosen in the PrusaConnect web UI (`trigger_scheme`).
+- Setup AP `PrusaCam-XXXX` at 192.168.4.1 with a per-device password (B12, S2).
+- Fallback setup AP: if the configured WiFi cannot be reached for 3 minutes, the setup AP comes
+  up alongside the station so the camera can be fixed without a serial cable. The station keeps
+  retrying every 30 s and the AP closes once WiFi is back and nobody is using it. The
+  connectivity-lost reboot is postponed while someone is connected to the AP (ADR-0009).
+- WiFi diagnostics in the log: RSSI on every connection (warning below −75 dBm) and the
+  disconnect reason by name on the first failure and every 10th.
+- Creating the user asks to repeat the password. The login password fields have an eye button
+  to show or hide what was typed.
+- Portable core with 46 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
+- `AGENTS.md` (and `CLAUDE.md`, which imports it) with architecture invariants, commands and
+  conventions for AI agents and contributors; ADR index and template.
 
-### Cambiado
-- Reescritura completa sobre ESP-IDF 5.5.5 y C++23, sin Arduino (ADR-0001).
-- Un único dueño por recurso y frames con referencias contadas: desaparecen las carreras entre
-  la web, el stream y las subidas (B4, B7–B10).
-- TLS con el bundle de CAs de ESP-IDF y buffers en PSRAM, con conexión persistente (S7, B6).
-- Un error de PrusaConnect ya no corta el WiFi: reintentos con backoff y recuperación escalonada
-  solo cuando la red realmente falla (B1, B2).
-- El detector de brownout queda activo y los reinicios por baja tensión quedan registrados.
+### Changed
+- Complete rewrite on ESP-IDF 5.5.5 and C++23, without Arduino (ADR-0001).
+- One owner per resource and reference-counted frames: the races between the web server, the
+  stream and the uploads are gone (B4, B7–B10).
+- TLS with the ESP-IDF CA bundle and buffers in PSRAM, over a persistent connection (S7, B6).
+- A PrusaConnect error no longer drops WiFi: retries with backoff and staged recovery only when
+  the network is really failing (B1, B2).
+- The brownout detector stays enabled and low-voltage reboots are recorded.
+- Code, docs, ADRs, web UI and changelog are now in English.
 
-### Corregido
-- La web se mostraba como HTML en crudo: el `Content-Type` de los archivos de la UI apuntaba a
-  memoria ya liberada. Probado en hardware (placa con OV3660).
-- La ETag de la UI ahora incluye el hash del firmware, así una actualización que cambia las
-  cabeceras no queda tapada por una respuesta vieja en la caché del navegador.
+### Fixed
+- The web UI was shown as raw HTML: the `Content-Type` of the UI files pointed to memory that
+  had already been freed. Tested on hardware (board with OV3660).
+- The UI ETag now includes the firmware hash, so an update that changes headers is not hidden
+  behind a stale response in the browser cache.
 
-### Compatibilidad
-- Se reproduce el *fingerprint* de v1.1.2: con el mismo token, PrusaConnect sigue reconociendo
-  la cámara migrada.
+### Compatibility
+- The v1.1.2 *fingerprint* is reproduced: with the same token, PrusaConnect keeps recognising the
+  migrated camera.
 
-### Pendiente
-- Soak de 48 h contra PrusaConnect en hardware.
-- OTA por web con rollback, coredump descargable, logs y timelapse en SD, PrusaLink.
+### Pending
+- 48 h soak against PrusaConnect on hardware.
+- OTA via web with rollback, downloadable coredump, logs and timelapse on SD, PrusaLink.

@@ -47,10 +47,10 @@ async function api(path, { method = 'GET', body } = {}) {
 
 // ---------- formatting ----------
 function ago(seconds) {
-  if (seconds == null) return 'nunca';
-  if (seconds < 60) return `hace ${seconds} s`;
-  if (seconds < 3600) return `hace ${Math.floor(seconds / 60)} min`;
-  return `hace ${Math.floor(seconds / 3600)} h`;
+  if (seconds == null) return 'never';
+  if (seconds < 60) return `${seconds} s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  return `${Math.floor(seconds / 3600)} h ago`;
 }
 
 function duration(seconds) {
@@ -73,44 +73,44 @@ const LEVEL = { type: 'range', min: -2, max: 2, step: 1 };
 
 const FORMS = {
   camera: {
-    title: 'Cámara',
+    title: 'Camera',
     endpoint: 'config/camera',
     sections: [
-      ['Imagen', [
-        { key: 'resolution', label: 'Resolución', type: 'select', options: RESOLUTIONS },
-        { key: 'jpeg_quality', label: 'Calidad JPEG', type: 'range', min: 10, max: 63, step: 1,
-          invert: true, hint: 'Más a la derecha = mejor calidad y archivo más grande' },
-        { key: 'rotation', label: 'Rotación', type: 'select',
+      ['Image', [
+        { key: 'resolution', label: 'Resolution', type: 'select', options: RESOLUTIONS },
+        { key: 'jpeg_quality', label: 'JPEG quality', type: 'range', min: 10, max: 63, step: 1,
+          invert: true, hint: 'Further right = better quality and a larger file' },
+        { key: 'rotation', label: 'Rotation', type: 'select',
           options: [[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']] },
-        { key: 'hmirror', label: 'Espejo horizontal', type: 'switch' },
-        { key: 'vflip', label: 'Volteo vertical', type: 'switch' },
+        { key: 'hmirror', label: 'Horizontal mirror', type: 'switch' },
+        { key: 'vflip', label: 'Vertical flip', type: 'switch' },
       ]],
-      ['Ajustes', [
-        { key: 'brightness', label: 'Brillo', ...LEVEL },
-        { key: 'contrast', label: 'Contraste', ...LEVEL },
-        { key: 'saturation', label: 'Saturación', ...LEVEL },
+      ['Adjustments', [
+        { key: 'brightness', label: 'Brightness', ...LEVEL },
+        { key: 'contrast', label: 'Contrast', ...LEVEL },
+        { key: 'saturation', label: 'Saturation', ...LEVEL },
       ]],
-      ['Exposición y ganancia', [
-        { key: 'auto_exposure', label: 'Exposición automática', type: 'switch' },
-        { key: 'aec_dsp', label: 'Exposición nocturna (AEC2)', type: 'switch',
-          hint: 'Mejora escenas con poca luz' },
-        { key: 'ae_level', label: 'Nivel de exposición', ...LEVEL },
-        { key: 'manual_exposure', label: 'Exposición manual', type: 'range', min: 0, max: 1200, step: 10,
+      ['Exposure and gain', [
+        { key: 'auto_exposure', label: 'Auto exposure', type: 'switch' },
+        { key: 'aec_dsp', label: 'Night exposure (AEC2)', type: 'switch',
+          hint: 'Improves low-light scenes' },
+        { key: 'ae_level', label: 'Exposure level', ...LEVEL },
+        { key: 'manual_exposure', label: 'Manual exposure', type: 'range', min: 0, max: 1200, step: 10,
           showIf: (v) => !v.auto_exposure },
-        { key: 'auto_gain', label: 'Ganancia automática', type: 'switch' },
-        { key: 'gain_ceiling', label: 'Techo de ganancia', type: 'select',
+        { key: 'auto_gain', label: 'Auto gain', type: 'switch' },
+        { key: 'gain_ceiling', label: 'Gain ceiling', type: 'select',
           options: [[0, '2×'], [1, '4×'], [2, '8×'], [3, '16×'], [4, '32×'], [5, '64×'], [6, '128×']],
-          hint: 'Más alto = imagen más clara con poca luz, pero con más ruido' },
-        { key: 'manual_gain', label: 'Ganancia manual', type: 'range', min: 0, max: 30, step: 1,
+          hint: 'Higher = brighter image in low light, but noisier' },
+        { key: 'manual_gain', label: 'Manual gain', type: 'range', min: 0, max: 30, step: 1,
           showIf: (v) => !v.auto_gain },
-        { key: 'auto_white_balance', label: 'Balance de blancos automático', type: 'switch' },
-        { key: 'lens_correction', label: 'Corrección de lente', type: 'switch' },
+        { key: 'auto_white_balance', label: 'Auto white balance', type: 'switch' },
+        { key: 'lens_correction', label: 'Lens correction', type: 'switch' },
       ]],
       ['Flash', [
-        { key: 'flash_on_capture', label: 'Flash al capturar', type: 'switch' },
-        { key: 'flash_lead_ms', label: 'Encendido previo', type: 'range', min: 0, max: 2000, step: 50,
+        { key: 'flash_on_capture', label: 'Flash on capture', type: 'switch' },
+        { key: 'flash_lead_ms', label: 'Lead time', type: 'range', min: 0, max: 2000, step: 50,
           unit: 'ms', showIf: (v) => v.flash_on_capture },
-        { key: 'flash_duty_pct', label: 'Intensidad', type: 'range', min: 5, max: 100, step: 5,
+        { key: 'flash_duty_pct', label: 'Intensity', type: 'range', min: 5, max: 100, step: 5,
           unit: '%', showIf: (v) => v.flash_on_capture },
       ]],
     ],
@@ -119,23 +119,23 @@ const FORMS = {
     title: 'PrusaConnect',
     endpoint: 'config/connect',
     sections: [
-      ['Conexión', [
-        { key: 'token', label: 'Token de la cámara', type: 'secret', setKey: 'token_set',
-          hint: 'En PrusaConnect: Cámaras → Agregar otra cámara → copiar el token' },
+      ['Connection', [
+        { key: 'token', label: 'Camera token', type: 'secret', setKey: 'token_set',
+          hint: 'In PrusaConnect: Cameras → Add new other camera → copy the token' },
         { key: 'fingerprint', label: 'Fingerprint', type: 'text', readonly: true },
-        { key: 'hostname', label: 'Servidor', type: 'text',
-          hint: 'El intervalo de fotos se elige en PrusaConnect, en la configuración de la cámara' },
+        { key: 'hostname', label: 'Server', type: 'text',
+          hint: 'The snapshot interval is chosen in PrusaConnect, in the camera settings' },
       ]],
     ],
   },
   network: {
-    title: 'Red',
+    title: 'Network',
     endpoint: 'config/network',
     sections: [
       ['WiFi', [
-        { key: 'ssid', label: 'Red (SSID)', type: 'text' },
-        { key: 'password', label: 'Contraseña', type: 'secret', setKey: 'password_set' },
-        { key: 'hostname', label: 'Nombre en la red (mDNS)', type: 'text', hint: 'Se accede como http://<nombre>.local' },
+        { key: 'ssid', label: 'Network (SSID)', type: 'text' },
+        { key: 'password', label: 'Password', type: 'secret', setKey: 'password_set' },
+        { key: 'hostname', label: 'Network name (mDNS)', type: 'text', hint: 'Reachable as http://<name>.local' },
       ]],
     ],
     extra: () => wifiScanner(),
@@ -180,9 +180,9 @@ function fieldControl(field, values, onChange) {
     case 'secret': {
       const isSet = !!values[field.setKey];
       const input = h('input', { type: 'password', id: `f-${field.key}`, autocomplete: 'off',
-                                 placeholder: isSet ? '•••••••• (guardado)' : 'sin configurar' });
+                                 placeholder: isSet ? '•••••••• (saved)' : 'not set' });
       input.addEventListener('change', () => onChange(input.value));
-      const eye = h('img', { src: 'icons/eye.svg', alt: 'mostrar', width: 18, style: 'cursor:pointer' });
+      const eye = h('img', { src: 'icons/eye.svg', alt: 'show', width: 18, style: 'cursor:pointer' });
       eye.addEventListener('click', () => {
         input.type = input.type === 'password' ? 'text' : 'password';
         eye.src = input.type === 'password' ? 'icons/eye.svg' : 'icons/eye-slash.svg';
@@ -228,18 +228,18 @@ async function renderForm(name) {
     if (spec.extra) view.append(spec.extra());
   };
 
-  const save = h('button', { class: 'btn medium', type: 'button', text: 'Guardar', disabled: true });
+  const save = h('button', { class: 'btn medium', type: 'button', text: 'Save', disabled: true });
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
       const result = await api(spec.endpoint, { method: 'PUT', body: changes });
       Object.assign(values, result);
       for (const k of Object.keys(changes)) delete changes[k];
-      toast(result.reboot_required ? 'Guardado. Se aplica al reiniciar.' : 'Guardado');
+      toast(result.reboot_required ? 'Saved. Applies after a reboot.' : 'Saved');
       draw();
       refreshStatus();
     } catch (e) {
-      if (!(e instanceof Unauthorized)) toast(`No se pudo guardar: ${e.message}`, true);
+      if (!(e instanceof Unauthorized)) toast(`Could not save: ${e.message}`, true);
       save.disabled = false;
     }
   });
@@ -248,17 +248,17 @@ async function renderForm(name) {
 
 function wifiScanner() {
   const body = h('tbody');
-  const button = h('button', { class: 'btn medium', type: 'button', text: 'Buscar redes' });
+  const button = h('button', { class: 'btn medium', type: 'button', text: 'Scan networks' });
   button.addEventListener('click', async () => {
     button.disabled = true;
     try {
       const networks = await api('wifi/scan');
       body.replaceChildren(...networks.map((n) => h('tr', {},
-        h('td', { text: n.ssid || '(oculta)' }),
+        h('td', { text: n.ssid || '(hidden)' }),
         h('td', { text: `${n.rssi} dBm` }),
         h('td', { text: n.channel }),
         h('td', { text: n.auth }),
-        h('td', {}, h('button', { class: 'btn small', type: 'button', text: 'Usar',
+        h('td', {}, h('button', { class: 'btn small', type: 'button', text: 'Use',
           onclick: () => { const i = $('#f-ssid'); i.value = n.ssid; i.dispatchEvent(new Event('change')); } })),
       )));
     } catch (e) {
@@ -267,10 +267,10 @@ function wifiScanner() {
     button.disabled = false;
   });
   return h('div', {},
-    h('h2', { text: 'Redes disponibles' }),
+    h('h2', { text: 'Available networks' }),
     h('div', { class: 'form-actions' }, button),
     h('table', { class: 'data' },
-      h('thead', {}, h('tr', {}, ['SSID', 'Señal', 'Canal', 'Seguridad', ''].map((t) => h('th', { text: t })))),
+      h('thead', {}, h('tr', {}, ['SSID', 'Signal', 'Channel', 'Security', ''].map((t) => h('th', { text: t })))),
       body));
 }
 
@@ -278,20 +278,20 @@ async function renderSystem() {
   const view = $('#view');
   const s = await api('status');
   const kv = (label, value) => [h('label', { class: 'key', text: label }), h('div', { class: 'value strong', text: value })];
-  const logs = h('pre', { class: 'log', text: 'Cargando…' });
+  const logs = h('pre', { class: 'log', text: 'Loading…' });
   view.replaceChildren(
-    h('h2', { text: 'Dispositivo' }),
+    h('h2', { text: 'Device' }),
     h('div', { class: 'form' },
       kv('Firmware', s.version),
-      kv('Encendido desde', duration(s.uptime_s)),
-      kv('RAM interna libre', `${Math.round(s.heap.internal_free / 1024)} KB (mínimo ${Math.round(s.heap.internal_min / 1024)} KB)`),
-      kv('PSRAM libre', `${Math.round(s.heap.psram_free / 1024)} KB`),
+      kv('Uptime', duration(s.uptime_s)),
+      kv('Free internal RAM', `${Math.round(s.heap.internal_free / 1024)} KB (minimum ${Math.round(s.heap.internal_min / 1024)} KB)`),
+      kv('Free PSRAM', `${Math.round(s.heap.psram_free / 1024)} KB`),
       kv('WiFi', `${s.wifi.ssid} · ${s.wifi.ip} · ${s.wifi.rssi} dBm`),
-      kv('Subidas OK / fallidas', `${s.connect.uploads_ok} / ${s.connect.uploads_failed}`),
-      kv('Último error', s.connect.last_error || '—')),
-    h('h2', { text: 'Últimos reinicios' }),
+      kv('Uploads OK / failed', `${s.connect.uploads_ok} / ${s.connect.uploads_failed}`),
+      kv('Last error', s.connect.last_error || '—')),
+    h('h2', { text: 'Recent reboots' }),
     h('table', { class: 'data' },
-      h('thead', {}, h('tr', {}, h('th', { text: 'Motivo' }), h('th', { text: 'Tras' }))),
+      h('thead', {}, h('tr', {}, h('th', { text: 'Reason' }), h('th', { text: 'After' }))),
       h('tbody', {}, (s.resets || []).map((r) => h('tr', {}, h('td', { text: r.reason }), h('td', { text: duration(r.uptime_s) }))))),
     h('h2', { text: 'Log' }),
     logs,
@@ -318,10 +318,10 @@ async function refreshStatus() {
     if (s.connect.frame_seq !== undefined && photo.dataset.seq !== String(s.connect.frame_seq)) {
       photo.dataset.seq = s.connect.frame_seq;
       photo.src = `${API}/snapshot.jpg?seq=${s.connect.frame_seq}`;
-      $('#photo-caption').textContent = `Capturado ${ago(s.connect.frame_age_s)}`;
+      $('#photo-caption').textContent = `Captured ${ago(s.connect.frame_age_s)}`;
     }
   } catch (e) {
-    if (!(e instanceof Unauthorized)) $('#connect-state').textContent = 'sin conexión con la cámara';
+    if (!(e instanceof Unauthorized)) $('#connect-state').textContent = 'camera unreachable';
   }
 }
 
@@ -347,13 +347,13 @@ function showLogin(setup = false, windowOpen = true) {
   $('#app').hidden = true;
   $('#login').hidden = false;
   $('#setup-hint').hidden = !setup;
-  $('#login-submit').textContent = setup ? 'Crear usuario' : 'Ingresar';
+  $('#login-submit').textContent = setup ? 'Create user' : 'Sign in';
   $('#login-form [name=password]').autocomplete = setup ? 'new-password' : 'current-password';
   $('#confirm-wrap').hidden = !setup;
   $('#login-form [name=confirm]').required = setup;
   $('#login-submit').disabled = setup && !windowOpen;
   $('#login-error').textContent = setup && !windowOpen
-    ? 'Por seguridad, el usuario inicial solo se puede crear en los primeros 15 minutos tras encender la cámara. Reiniciala y volvé a intentar.'
+    ? 'For security, the initial user can only be created during the first 15 minutes after powering on the camera. Reboot it and try again.'
     : '';
 }
 
@@ -368,7 +368,7 @@ $('#login-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = Object.fromEntries(new FormData(ev.target));
   if (setupMode && body.password !== body.confirm) {
-    $('#login-error').textContent = 'Las contraseñas no coinciden';
+    $('#login-error').textContent = 'Passwords do not match';
     return;
   }
   delete body.confirm;  // client-side check only; the API takes username + password
@@ -377,7 +377,7 @@ $('#login-form').addEventListener('submit', async (ev) => {
     $('#login-error').textContent = '';
     showApp();
   } catch (e) {
-    $('#login-error').textContent = e instanceof Unauthorized ? 'Usuario o contraseña incorrectos' : e.message;
+    $('#login-error').textContent = e instanceof Unauthorized ? 'Wrong username or password' : e.message;
   }
 });
 
@@ -388,7 +388,7 @@ for (const btn of document.querySelectorAll('#login-form .pw-eye')) {
     const show = input.type === 'password';
     input.type = show ? 'text' : 'password';
     btn.firstElementChild.src = show ? 'icons/eye-slash.svg' : 'icons/eye.svg';
-    btn.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   });
 }
 
@@ -403,7 +403,7 @@ async function action(path, body, message) {
 
 $('#snap-now').addEventListener('click', async (ev) => {
   ev.target.disabled = true;
-  await action('snapshot', {}, 'Snapshot solicitado');
+  await action('snapshot', {}, 'Snapshot requested');
   setTimeout(() => { ev.target.disabled = false; refreshStatus(); }, 2500);
 });
 $('#light-toggle').addEventListener('click', async () => { await action('light', { on: !lightOn }); refreshStatus(); });
@@ -411,12 +411,12 @@ $('#refresh').addEventListener('click', () => { refreshStatus(); route(); });
 $('#reboot').addEventListener('click', () => {
   const b = $('#reboot');
   if (b.dataset.armed) {
-    action('reboot', {}, 'Reiniciando… la página se reconecta sola.');
+    action('reboot', {}, 'Rebooting… the page reconnects by itself.');
     delete b.dataset.armed;
   } else {
     b.dataset.armed = '1';
-    b.lastChild.textContent = ' ¿Confirmar?';
-    setTimeout(() => { delete b.dataset.armed; b.lastChild.textContent = ' Reiniciar'; }, 4000);
+    b.lastChild.textContent = ' Confirm?';
+    setTimeout(() => { delete b.dataset.armed; b.lastChild.textContent = ' Reboot'; }, 4000);
   }
 });
 $('#logout').addEventListener('click', async () => { await action('logout'); showLogin(); });

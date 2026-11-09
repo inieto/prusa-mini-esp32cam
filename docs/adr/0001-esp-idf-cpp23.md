@@ -1,17 +1,17 @@
-# ADR-0001: ESP-IDF v5.5.5 + C++23, sin Arduino
+# ADR-0001: ESP-IDF v5.5.5 + C++23, no Arduino
 
-- Estado: aceptada · 2026-09-27
+- Status: accepted · 2026-09-27
 
-## Contexto
-v1.1.2 usa arduino-esp32 sobre ESP-IDF, lo que oculta configuración clave (mbedTLS en PSRAM,
-bundle de CAs, rollback de OTA, coredump) y mezcla APIs bloqueantes. Se evaluaron Rust
-(`esp-idf-svc`) y Go (TinyGo, sin WiFi/cámara/TLS en ESP32 → descartado).
+## Context
+v1.1.2 uses arduino-esp32 on top of ESP-IDF, which hides key settings (mbedTLS in PSRAM, CA
+bundle, OTA rollback, coredump) and mixes blocking APIs. Rust (`esp-idf-svc`) and Go were
+evaluated (TinyGo has no WiFi/camera/TLS on the ESP32 → rejected).
 
-## Decisión
-ESP-IDF **v5.5.5** (última 5.x; `esp32-camera` 2.1.x exige ≥ 5.1) en **C++23**
-(`std::expected`, `std::span`), sin excepciones ni RTTI. El núcleo es C++ portable.
+## Decision
+ESP-IDF **v5.5.5** (latest 5.x; `esp32-camera` 2.1.x requires ≥ 5.1) in **C++23**
+(`std::expected`, `std::span`), without exceptions or RTTI. The core is portable C++.
 
-## Consecuencias
-+ Acceso directo a sdkconfig, drivers nativos, binarios chicos, mismo lenguaje que ESP-DL.
-− Se pierde el flujo "abrir en Arduino IDE"; el build es `idf.py`.
-− Pasar a IDF 6.x será un ADR aparte cuando `esp32-camera` lo declare probado.
+## Consequences
++ Direct access to sdkconfig, native drivers, small binaries, same language as ESP-DL.
+− The "open in Arduino IDE" workflow is gone; the build is `idf.py`.
+− Moving to IDF 6.x will be a separate ADR once `esp32-camera` declares it tested.

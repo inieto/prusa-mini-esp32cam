@@ -4,9 +4,8 @@ Guide for AI coding agents (and humans) working on **PrusaCam byClaude**: firmwa
 **AI Thinker ESP32-CAM (ESP32-D0WDQ6, OV2640, 4 MB PSRAM, 4 MB flash)** whose job is to publish
 snapshots to **PrusaConnect** reliably, securely and observably.
 
-Language: this file is in English for reach. Architecture docs, ADRs, the web UI, the changelog and
-commit messages are in **Spanish** — keep them that way. Code, identifiers and code comments are in
-English.
+Language: **everything is in English** — code, identifiers, comments, architecture docs, ADRs,
+the web UI, API error messages, the changelog and commit messages.
 
 ## Read first
 
@@ -58,8 +57,9 @@ UI without hardware:
 python3 tools/mock_server.py 8080   # http://localhost:8080, first load asks to create a user
 ```
 
-Flashing (`idf.py -p <port> flash monitor`) needs a human: IO0 must be jumpered to GND while
-powering on. **Never flash on your own** — ask the maintainer, and make a backup first
+Flashing (`idf.py -p <port> flash monitor`, or `app-flash` to keep NVS) needs a human: IO0 must
+be jumpered to GND while powering on, unless the programmer drives it via RTS/DTR. **Never flash
+on your own** — ask the maintainer, and make a backup first
 (`esptool.py read_flash 0 0x400000 backup.bin`).
 
 ## Architecture invariants (do not break)
@@ -100,29 +100,29 @@ powering on. **Never flash on your own** — ask the maintainer, and make a back
   `tools/mock_server.py`. Change both, then check the UI against the mock.
 - Settings stored as NVS blobs are versioned (`SettingsStore::kCameraSchema`): bump the version
   when `CameraSettings` changes layout.
-- UI strings in Spanish (rioplatense). Visual language: tokens at the top of `web/src/styles.css`
+- UI strings in English. Visual language: tokens at the top of `web/src/styles.css`
   (orange `#FA6831`, greys, white buttons that turn orange on hover). No frameworks, no build step.
 - Keep the web bundle small (currently ~18 KB gzip, max 32 assets).
 
 ## Decisions (ADRs)
 
 Any change to architecture, dependencies, memory layout, security model or external protocols needs
-an ADR: copy `docs/adr/0000-template.md` to the next number, set it to *propuesta*, and link it from
-the PR. Superseding an ADR means a new ADR plus marking the old one *reemplazada por ADR-XXXX*.
+an ADR: copy `docs/adr/0000-template.md` to the next number, set it to *proposed*, and link it from
+the PR. Superseding an ADR means a new ADR plus marking the old one *superseded by ADR-XXXX*.
 
 ## Commits, changelog, PRs
 
-- Commit messages in Spanish: short imperative subject, body explaining what and why, finding IDs
-  where relevant (e.g. "corrige B8"). One logical change per commit.
-- Update `CHANGELOG.md` → `[Sin publicar]` for anything user-visible.
+- Commit messages in English: short imperative subject, body explaining what and why, finding IDs
+  where relevant (e.g. "fix B8"). One logical change per commit.
+- Update `CHANGELOG.md` → `[Unreleased]` for anything user-visible.
 - Before committing: host tests green, `idf.py build` clean, UI checked against the mock if touched.
 - State clearly in the PR/commit whether it was **tested on hardware** or only built/host-tested.
 
 ## Current status and roadmap
 
-See `CHANGELOG.md` (`[Sin publicar]` → *Pendiente*). At the time of writing the firmware builds
-and the core is tested, but it has **not yet run on hardware**. Next steps, in order:
-1. First flash and bring-up on the real board; 48 h soak against PrusaConnect.
+See `CHANGELOG.md` (`[Unreleased]` → *Pending*). The firmware runs on a test board (OV3660
+sensor): web UI, login, WiFi and PrusaConnect uploads work. Next steps, in order:
+1. 48 h soak against PrusaConnect; test the fallback setup AP (ADR-0009) on hardware.
 2. OTA upload from the web UI with rollback (`BOOTLOADER_APP_ROLLBACK_ENABLE` is already on) and
    coredump download.
 3. SD card: persistent logs (batched), timelapse per print, file browser.
