@@ -10,6 +10,8 @@
 #include <mdns.h>
 #include <nvs.h>
 
+#include <climits>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 
@@ -22,6 +24,40 @@ constexpr const char* kTag = "network";
 RTC_NOINIT_ATTR uint32_t g_requested_reboot;
 constexpr uint32_t kRebootMagic = 0xB7C1A000;
 
+// Without a connection for this long, the setup AP comes up as well (see network.hpp).
+constexpr uint64_t kFallbackDelayUs = 3ull * 60 * 1'000'000;
+// While the fallback AP is up, the station retries this slowly: every attempt scans all
+// channels and drags the AP along, which drops phones connected to it.
+constexpr uint64_t kFallbackRetryUs = 30ull * 1'000'000;
+// After the station connects, the fallback AP is closed once no client is using it.
+constexpr uint64_t kApCloseCheckUs = 30ull * 1'000'000;
+// Below this RSSI the ESP32-CAM's PCB antenna struggles to be heard by the router.
+constexpr int kWeakRssi = -75;
+
+const char* reason_name(uint8_t reason) {
+  switch (reason) {
+    case WIFI_REASON_AUTH_EXPIRE: return "auth timeout (router did not answer: weak signal?)";
+    case WIFI_REASON_AUTH_FAIL: return "auth failed";
+    case WIFI_REASON_ASSOC_EXPIRE: return "association timeout";
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT: return "handshake timeout (wrong password?)";
+    case WIFI_REASON_HANDSHAKE_TIMEOUT: return "handshake timeout (wrong password?)";
+    case WIFI_REASON_NO_AP_FOUND: return "network not found";
+    case WIFI_REASON_BEACON_TIMEOUT: return "beacon timeout (signal lost)";
+    case WIFI_REASON_CONNECTION_FAIL: return "connection failed";
+    case WIFI_REASON_ASSOC_LEAVE: return "left";
+    default: return "other";
+  }
+}
+
+esp_timer_handle_t make_timer(esp_timer_cb_t cb, void* arg, const char* name) {
+  esp_timer_handle_t t = nullptr;
+  const esp_timer_create_args_t args = {.callback = cb, .arg = arg,
+                                        .dispatch_method = ESP_TIMER_TASK, .name = name,
+                                        .skip_unhandled_events = true};
+  ESP_ERROR_CHECK(esp_timer_create(&args, &t));
+  return t;
+}
+
 }  // namespace
 
 core::Result<void> Network::start(const WifiCredentials& wifi, const std::string& ap_password) {
@@ -31,12 +67,19 @@ core::Result<void> Network::start(const WifiCredentials& wifi, const std::string
 
   esp_netif_t* sta = esp_netif_create_default_wifi_sta();
   esp_netif_set_hostname(sta, wifi.hostname.c_str());
+  // Created up front so the fallback AP can be raised later from a timer callback.
+  esp_netif_create_default_wifi_ap();  // 192.168.4.1: never collides with 192.168.0.x (B12)
+  ap_password_ = ap_password;
 
   wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
   if ((err = esp_wifi_init(&init)) != ESP_OK) return core::fail(core::Errc::Io, err);
   esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &Network::on_event, this);
   esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Network::on_event, this);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);  // credentials live in our NVS namespace
+
+  fallback_timer_ = make_timer(&Network::on_fallback_timer, this, "wifi_fallback");
+  retry_timer_ = make_timer(&Network::on_retry_timer, this, "wifi_retry");
+  ap_close_timer_ = make_timer(&Network::on_ap_close_timer, this, "ap_close");
 
   have_sta_ = !wifi.ssid.empty();
   if (have_sta_) {
@@ -52,32 +95,90 @@ core::Result<void> Network::start(const WifiCredentials& wifi, const std::string
     sta_cfg.sta.pmf_cfg.capable = true;
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
-    std::lock_guard lock(mutex_);
-    ssid_ = wifi.ssid;
+    {
+      std::lock_guard lock(mutex_);
+      ssid_ = wifi.ssid;
+    }
+    arm_fallback();
   } else {
-    esp_netif_create_default_wifi_ap();  // 192.168.4.1: never collides with 192.168.0.x (B12)
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
-    wifi_config_t ap_cfg = {};
-    const int n = std::snprintf(reinterpret_cast<char*>(ap_cfg.ap.ssid), sizeof ap_cfg.ap.ssid,
-                                "PrusaCam-%02X%02X", mac[4], mac[5]);
-    ap_cfg.ap.ssid_len = static_cast<uint8_t>(n);
-    std::strncpy(reinterpret_cast<char*>(ap_cfg.ap.password), ap_password.c_str(),
-                 sizeof ap_cfg.ap.password);
-    ap_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
-    ap_cfg.ap.max_connection = 2;
-    ap_cfg.ap.channel = 6;
-    esp_wifi_set_mode(WIFI_MODE_APSTA);  // STA side idle, but able to scan for networks
-    esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
-    ap_active_ = true;
-    ESP_LOGW(kTag, "No WiFi configured. Setup AP '%s', password '%s', http://192.168.4.1",
-             reinterpret_cast<char*>(ap_cfg.ap.ssid), ap_password.c_str());
+    start_ap(false);
   }
 
   if ((err = esp_wifi_start()) != ESP_OK) return core::fail(core::Errc::Io, err);
   esp_wifi_set_ps(WIFI_PS_NONE);  // latency and stability over power: we are mains powered
   start_services(wifi.hostname);
   return {};
+}
+
+// Raises the setup AP "PrusaCam-XXXX". keep_sta: fallback mode, the station keeps retrying.
+void Network::start_ap(bool keep_sta) {
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
+  wifi_config_t ap_cfg = {};
+  const int n = std::snprintf(reinterpret_cast<char*>(ap_cfg.ap.ssid), sizeof ap_cfg.ap.ssid,
+                              "PrusaCam-%02X%02X", mac[4], mac[5]);
+  ap_cfg.ap.ssid_len = static_cast<uint8_t>(n);
+  std::strncpy(reinterpret_cast<char*>(ap_cfg.ap.password), ap_password_.c_str(),
+               sizeof ap_cfg.ap.password);
+  ap_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
+  ap_cfg.ap.max_connection = 2;
+  ap_cfg.ap.channel = 6;
+  esp_wifi_set_mode(WIFI_MODE_APSTA);  // STA side kept: to scan networks, or to keep retrying
+  esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
+  ap_active_ = true;
+  fallback_ap_ = keep_sta;
+  if (keep_sta) {
+    ESP_LOGW(kTag, "could not join '%s' for %llu min: setup AP '%s' (password '%s') is up at "
+             "http://192.168.4.1; still retrying every %llu s",
+             ssid_.c_str(), kFallbackDelayUs / 60'000'000, reinterpret_cast<char*>(ap_cfg.ap.ssid),
+             ap_password_.c_str(), kFallbackRetryUs / 1'000'000);
+  } else {
+    ESP_LOGW(kTag, "No WiFi configured. Setup AP '%s', password '%s', http://192.168.4.1",
+             reinterpret_cast<char*>(ap_cfg.ap.ssid), ap_password_.c_str());
+  }
+}
+
+void Network::arm_fallback() {
+  if (!have_sta_ || fallback_ap_) return;
+  esp_timer_stop(fallback_timer_);  // restart the countdown
+  esp_timer_start_once(fallback_timer_, kFallbackDelayUs);
+}
+
+void Network::on_fallback_timer(void* arg) {
+  auto* self = static_cast<Network*>(arg);
+  if (!self->connected_ && !self->ap_active_) self->start_ap(true);
+}
+
+void Network::on_retry_timer(void* arg) {
+  auto* self = static_cast<Network*>(arg);
+  if (!self->connected_) esp_wifi_connect();
+}
+
+void Network::on_ap_close_timer(void* arg) {
+  auto* self = static_cast<Network*>(arg);
+  if (!self->fallback_ap_ || !self->connected_) return;
+  if (self->ap_client_count() > 0) return;  // someone is using it: check again later
+  esp_timer_stop(self->ap_close_timer_);
+  esp_wifi_set_mode(WIFI_MODE_STA);
+  self->ap_active_ = false;
+  self->fallback_ap_ = false;
+  ESP_LOGI(kTag, "WiFi connected again: setup AP closed");
+}
+
+int Network::ap_client_count() const {
+  if (!ap_active_) return 0;
+  wifi_sta_list_t list{};
+  return esp_wifi_ap_get_sta_list(&list) == ESP_OK ? list.num : 0;
+}
+
+void Network::log_disconnect(const wifi_event_sta_disconnected_t& ev) {
+  ++failures_;
+  // First failure, then every 10th: enough to diagnose without flooding the log.
+  if (failures_ != 1 && failures_ % 10 != 0) return;
+  ESP_LOGW(kTag, "cannot join '%.*s': %s (reason %u), RSSI %d dBm%s, attempt %lu",
+           ev.ssid_len, reinterpret_cast<const char*>(ev.ssid), reason_name(ev.reason),
+           ev.reason, ev.rssi, ev.rssi != 0 && ev.rssi < kWeakRssi ? " (weak)" : "",
+           static_cast<unsigned long>(failures_));
 }
 
 void Network::start_services(const std::string& hostname) {
@@ -96,10 +197,24 @@ void Network::on_event(void* arg, esp_event_base_t base, int32_t id, void* data)
     if (self->have_sta_) esp_wifi_connect();
   } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
     const auto* ev = static_cast<wifi_event_sta_disconnected_t*>(data);
-    if (self->connected_) ESP_LOGW(kTag, "disconnected (reason %d), reconnecting", ev->reason);
+    if (self->connected_) {
+      ESP_LOGW(kTag, "disconnected: %s (reason %u), reconnecting", reason_name(ev->reason),
+               ev->reason);
+      self->failures_ = 0;
+      self->arm_fallback();  // a fresh outage gets the full delay before the AP comes up
+    } else {
+      self->log_disconnect(*ev);
+    }
     self->connected_ = false;
-    // The driver paces retries; the recovery ladder handles long outages.
-    if (self->have_sta_) esp_wifi_connect();
+    if (!self->have_sta_) return;
+    // The driver paces retries; the recovery ladder handles long outages. With the fallback
+    // AP up, retry slowly so phones on the AP are not kicked by channel scans.
+    if (self->fallback_ap_) {
+      esp_timer_stop(self->retry_timer_);
+      esp_timer_start_once(self->retry_timer_, kFallbackRetryUs);
+    } else {
+      esp_wifi_connect();
+    }
   } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
     const auto* ev = static_cast<ip_event_got_ip_t*>(data);
     char ip[16];
@@ -109,7 +224,19 @@ void Network::on_event(void* arg, esp_event_base_t base, int32_t id, void* data)
       self->ip_ = ip;
     }
     self->connected_ = true;
-    ESP_LOGI(kTag, "connected, IP %s", ip);
+    self->failures_ = 0;
+    esp_timer_stop(self->fallback_timer_);
+    wifi_ap_record_t ap{};
+    const int rssi = esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.rssi : 0;
+    ESP_LOGI(kTag, "connected, IP %s, RSSI %d dBm", ip, rssi);
+    if (rssi != 0 && rssi < kWeakRssi) {
+      ESP_LOGW(kTag, "weak WiFi signal (%d dBm): uploads may fail; move the camera closer to "
+               "the router or check the antenna", rssi);
+    }
+    if (self->fallback_ap_) {
+      esp_timer_stop(self->ap_close_timer_);
+      esp_timer_start_periodic(self->ap_close_timer_, kApCloseCheckUs);
+    }
   }
 }
 
@@ -156,7 +283,7 @@ std::vector<ScanResult> Network::scan() {
     const wifi_ap_record_t& r = records[i];
     std::string_view auth = "WPA2";
     switch (r.authmode) {
-      case WIFI_AUTH_OPEN: auth = "abierta"; break;
+      case WIFI_AUTH_OPEN: auth = "open"; break;
       case WIFI_AUTH_WEP: auth = "WEP"; break;
       case WIFI_AUTH_WPA_PSK: auth = "WPA"; break;
       case WIFI_AUTH_WPA3_PSK: auth = "WPA3"; break;
@@ -170,6 +297,18 @@ std::vector<ScanResult> Network::scan() {
 }
 
 void EspSystem::reboot(core::RebootReason reason) {
+  // Do not pull the rug from under someone reconfiguring the camera on the setup AP; the
+  // recovery ladder asks again on its next evaluation.
+  if (reason == core::RebootReason::ConnectivityLost && network_.ap_client_count() > 0) {
+    // The ladder asks every tick while it is due: log once a minute, not every second.
+    static int64_t last_log_us = INT64_MIN / 2;
+    const int64_t now_us = esp_timer_get_time();
+    if (now_us - last_log_us >= 60'000'000) {
+      ESP_LOGW(kTag, "connectivity reboot postponed: a client is on the setup AP");
+      last_log_us = now_us;
+    }
+    return;
+  }
   g_requested_reboot = kRebootMagic | static_cast<uint32_t>(reason);
   ESP_LOGW(kTag, "rebooting (reason %u)", static_cast<unsigned>(reason));
   esp_restart();

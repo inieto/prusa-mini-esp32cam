@@ -1,7 +1,14 @@
 // WiFi station with automatic reconnection, setup access point, mDNS and SNTP.
+//
+// If WiFi credentials exist but the station cannot connect for kFallbackDelay (wrong password,
+// router gone, weak signal), the setup AP is brought up as well so the camera can be
+// reconfigured without a serial cable. The station keeps retrying in the background, more
+// slowly so the AP stays usable; once it connects and no client is on the AP, the AP is closed.
 #pragma once
 
 #include <esp_event.h>
+#include <esp_timer.h>
+#include <esp_wifi.h>
 
 #include <atomic>
 #include <mutex>
@@ -28,6 +35,7 @@ class Network final : public core::NetworkInfo {
   bool connected() const override { return connected_; }
   core::connect::NetworkSnapshot current() const override;
   bool setup_ap_active() const { return ap_active_; }
+  int ap_client_count() const;
   std::string mac_string() const;
   core::connect::Mac efuse_mac() const;
 
@@ -36,11 +44,23 @@ class Network final : public core::NetworkInfo {
 
  private:
   static void on_event(void* arg, esp_event_base_t base, int32_t id, void* data);
+  static void on_fallback_timer(void* arg);
+  static void on_retry_timer(void* arg);
+  static void on_ap_close_timer(void* arg);
   void start_services(const std::string& hostname);
+  void start_ap(bool keep_sta);
+  void arm_fallback();
+  void log_disconnect(const wifi_event_sta_disconnected_t& ev);
 
   std::atomic<bool> connected_{false};
   std::atomic<bool> ap_active_{false};
   bool have_sta_ = false;
+  std::atomic<bool> fallback_ap_{false};  // AP raised because the station could not connect
+  uint32_t failures_ = 0;                 // consecutive failed connection attempts
+  std::string ap_password_;
+  esp_timer_handle_t fallback_timer_ = nullptr;
+  esp_timer_handle_t retry_timer_ = nullptr;
+  esp_timer_handle_t ap_close_timer_ = nullptr;
   mutable std::mutex mutex_;
   std::string ip_;
   std::string ssid_;
