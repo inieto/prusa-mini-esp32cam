@@ -349,6 +349,8 @@ function showLogin(setup = false, windowOpen = true) {
   $('#setup-hint').hidden = !setup;
   $('#login-submit').textContent = setup ? 'Crear usuario' : 'Ingresar';
   $('#login-form [name=password]').autocomplete = setup ? 'new-password' : 'current-password';
+  $('#confirm-wrap').hidden = !setup;
+  $('#login-form [name=confirm]').required = setup;
   $('#login-submit').disabled = setup && !windowOpen;
   $('#login-error').textContent = setup && !windowOpen
     ? 'Por seguridad, el usuario inicial solo se puede crear en los primeros 15 minutos tras encender la cámara. Reiniciala y volvé a intentar.'
@@ -364,15 +366,31 @@ function showApp() {
 
 $('#login-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  const form = new FormData(ev.target);
+  const body = Object.fromEntries(new FormData(ev.target));
+  if (setupMode && body.password !== body.confirm) {
+    $('#login-error').textContent = 'Las contraseñas no coinciden';
+    return;
+  }
+  delete body.confirm;  // client-side check only; the API takes username + password
   try {
-    await api(setupMode ? 'setup' : 'login', { method: 'POST', body: Object.fromEntries(form) });
+    await api(setupMode ? 'setup' : 'login', { method: 'POST', body });
     $('#login-error').textContent = '';
     showApp();
   } catch (e) {
     $('#login-error').textContent = e instanceof Unauthorized ? 'Usuario o contraseña incorrectos' : e.message;
   }
 });
+
+// Show/hide toggle for the login and setup password fields.
+for (const btn of document.querySelectorAll('#login-form .pw-eye')) {
+  btn.addEventListener('click', () => {
+    const input = btn.previousElementSibling;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.firstElementChild.src = show ? 'icons/eye-slash.svg' : 'icons/eye.svg';
+    btn.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+  });
+}
 
 async function action(path, body, message) {
   try {

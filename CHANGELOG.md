@@ -19,6 +19,8 @@ v1.1.2 (auditoría todavía no publicada en el repo).
   (F2: imagen oscura).
 - El intervalo de fotos se toma del que se elige en la web de PrusaConnect (`trigger_scheme`).
 - AP de configuración `PrusaCam-XXXX` en 192.168.4.1 con clave única por dispositivo (B12, S2).
+- Al crear el usuario se pide repetir la contraseña. Los campos de contraseña del login tienen
+  un botón (ojito) para mostrar u ocultar lo escrito.
 - Núcleo portable con 46 tests en la Mac (GoogleTest + AddressSanitizer/UBSan).
 - `AGENTS.md` (y `CLAUDE.md` que lo importa) con invariantes de arquitectura, comandos y
   convenciones para agentes de IA y contribuidores; índice y plantilla de ADRs.

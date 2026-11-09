@@ -15,7 +15,14 @@
     <form id="login-form">
       <div style="display:flex;flex-direction:column;gap:.6rem">
         <input name="username" autocomplete="username" placeholder="Usuario" required>
-        <input name="password" type="password" autocomplete="current-password" placeholder="Contraseña" required minlength="8">
+        <div class="pw-wrap">
+          <input name="password" type="password" autocomplete="current-password" placeholder="Contraseña" required minlength="8">
+          <button type="button" class="pw-eye" aria-label="Mostrar contraseña"><img src="icons/eye.svg" alt="" width="18"></button>
+        </div>
+        <div class="pw-wrap" id="confirm-wrap" hidden>
+          <input name="confirm" type="password" autocomplete="new-password" placeholder="Repetir contraseña" minlength="8">
+          <button type="button" class="pw-eye" aria-label="Mostrar contraseña"><img src="icons/eye.svg" alt="" width="18"></button>
+        </div>
         <button class="btn" type="submit" id="login-submit">Ingresar</button>
         <div class="error" id="login-error"></div>
       </div>

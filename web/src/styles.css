@@ -243,6 +243,10 @@ pre.log {
 .login img { height: 35px; margin-bottom: 0.5rem; }
 .login input { font: 14px var(--font); padding: 6px 8px; border: 1px solid #bbb; border-radius: 4px; }
 .login .btn { min-width: 0; }
+.login .pw-wrap { position: relative; display: flex; }
+.login .pw-wrap input { flex: 1; padding-right: 32px; }
+.login .pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: 0; padding: 4px; cursor: pointer; line-height: 0; }
 .login .error { color: var(--bad); font-size: 13px; min-height: 1em; }
 
 /* ---------- footer ---------- */
