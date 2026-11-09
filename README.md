@@ -1,6 +1,6 @@
 # PrusaCam byClaude
 
-New firmware for the **AI Thinker ESP32-CAM (OV2640)** that publishes snapshots to
+New firmware for the **AI Thinker ESP32-CAM (OV2640 / OV3660)** that publishes snapshots to
 **PrusaConnect**. A from-scratch rewrite of
 [Prusa-Firmware-ESP32-Cam](https://github.com/prusa3d/Prusa-Firmware-ESP32-Cam) v1.1.2, with a
 hexagonal architecture, actors and secure defaults.
@@ -14,13 +14,17 @@ hexagonal architecture, actors and secure defaults.
 
 | Slice | Status |
 |---|---|
-| Portable core (policies, PrusaConnect protocol, EXIF, FramePool, JSON, UI bundle) + 47 host tests | ✅ |
-| ESP-IDF adapters: camera, PrusaConnect client, WiFi/AP/mDNS/SNTP, NVS | ✅ running on hardware (board with OV3660) |
-| HTTP server: login (PBKDF2 + cookie), REST API `/api/v1`, embedded gzipped UI (~18 KB) | ✅ running on hardware |
-| Diagnostics: RAM log in the web UI, reboot history with previous uptime, WiFi RSSI/reasons | ✅ |
-| Fallback setup AP when the WiFi is unreachable (ADR-0009) | ✅ builds, not yet tested on hardware |
-| Web UI with the Prusa look (checked against the mock server) | ✅ |
-| 48 h soak, OTA via web with rollback, coredump via API, SD logs, timelapse, PrusaLink | ⏳ |
+| Portable core (policies, PrusaConnect/PrusaLink protocols, EXIF, FramePool, storage rules, MQTT discovery) + 64 host tests | ✅ |
+| Camera (OV2640/OV3660 detected, up to QXGA), PrusaConnect client, WiFi/AP/mDNS/SNTP, NVS | ✅ running on hardware (board with OV3660) |
+| HTTP server: login (PBKDF2 + cookie), REST API `/api/v1`, embedded gzipped UI | ✅ running on hardware |
+| Diagnostics: RAM log, reboot history, WiFi RSSI/reasons, crash dumps over the API | ✅ builds |
+| Fallback setup AP (ADR-0009), factory reset (GPIO12 or web) | ✅ builds, not yet tested on hardware |
+| Web OTA with health-checked rollback (ADR-0010) | ✅ builds, not yet tested on hardware |
+| SD card: daily logs with rotation, timelapse, file browser (ADR-0011) | ✅ builds, not yet tested on hardware |
+| PrusaLink: printer state, per-print timelapse, upload only while printing (ADR-0012) | ✅ builds, not yet tested on hardware |
+| MQTT / Home Assistant discovery (ADR-0013) | ✅ builds, not yet tested on hardware |
+| MJPEG live view (ADR-0014) | ✅ builds, not yet tested on hardware |
+| 48 h soak against PrusaConnect (`tools/soak.py`) | ⏳ |
 
 ## First use
 
@@ -30,6 +34,16 @@ hexagonal architecture, actors and secure defaults.
 2. There is no factory password: opening the web UI creates the user. For security this can only
    be done **during the first 15 minutes** after power-on (if the window closes, reboot the camera).
 3. In the *PrusaConnect* tab, paste the token; the interval is chosen in the PrusaConnect web UI.
+4. Optional: *Printer* (PrusaLink address and password), *Storage* (SD card, timelapse) and
+   *MQTT* (Home Assistant).
+
+Factory reset: jumper GPIO12 to GND, power on and keep it ~10 s until the red LED stays on,
+then remove the jumper (or *System → Factory reset*).
+
+## Updating
+
+*System → Firmware*: upload `firmware/build/prusacam_byclaude.bin`. The new version must run a
+minute with WiFi up, otherwise the previous one comes back on the next reset.
 
 ## Requirements
 

@@ -25,12 +25,14 @@ firmware/                           ESP-IDF project (main/, components/, partiti
   components/core/                  portable C++23 core: NO ESP-IDF/FreeRTOS includes, host-testable
     include/core/ports.hpp          interfaces the core needs (camera, PrusaConnect, network, system, log)
     include/core/snapshot_service   main use case: capture → upload, retries, recovery ladder
-  components/device/                ESP-IDF adapters implementing the ports + HTTP server
+  components/device/                ESP-IDF adapters implementing the ports + HTTP server, SD storage,
+                                    PrusaLink monitor, MQTT bridge, live stream, OTA/coredump
   main/main.cpp                     composition root (wires everything, starts tasks)
 test/host/                          GoogleTest suite for core (runs on macOS/Linux with sanitizers)
 web/src/                            web UI (vanilla HTML/CSS/JS, Prusa look), packed into flash
 tools/pack_web.py                   packs web/src into the gzip bundle embedded in the firmware
 tools/mock_server.py                fake /api/v1 to develop the UI without hardware (API contract)
+tools/soak.py                       48 h reliability check against a real camera
 ```
 
 ## Commands
@@ -67,7 +69,8 @@ on your own** — ask the maintainer, and make a backup first
 1. **`components/core` never includes ESP-IDF or FreeRTOS headers.** It must keep compiling with
    the host toolchain. Platform code goes in `components/device` behind a port (ADR-0002).
 2. **One owner per resource.** Only the task running `SnapshotService` touches the camera driver
-   and sensor. Other tasks *request* (e.g. `EspCamera::request_settings`,
+   and sensor (scheduled ticks + live-view previews). The storage task owns SD writes; the
+   printer and MQTT tasks own their connections. Other tasks *request* (e.g. `EspCamera::request_settings`,
    `SnapshotService::request_snapshot`). HTTP handlers never call drivers (ADR-0003).
 3. **Frames are shared through `FrameRef`** (reference-counted slots of a preallocated
    `FramePool`). Never keep raw pointers to frame bytes beyond the life of a `FrameRef`; never
@@ -102,7 +105,7 @@ on your own** — ask the maintainer, and make a backup first
   when `CameraSettings` changes layout.
 - UI strings in English. Visual language: tokens at the top of `web/src/styles.css`
   (orange `#FA6831`, greys, white buttons that turn orange on hover). No frameworks, no build step.
-- Keep the web bundle small (currently ~18 KB gzip, max 32 assets).
+- Keep the web bundle small (currently ~22 KB gzip, max 32 assets).
 
 ## Decisions (ADRs)
 
@@ -120,14 +123,14 @@ the PR. Superseding an ADR means a new ADR plus marking the old one *superseded 
 
 ## Current status and roadmap
 
-See `CHANGELOG.md` (`[Unreleased]` → *Pending*). The firmware runs on a test board (OV3660
-sensor): web UI, login, WiFi and PrusaConnect uploads work. Next steps, in order:
-1. 48 h soak against PrusaConnect; test the fallback setup AP (ADR-0009) on hardware.
-2. OTA upload from the web UI with rollback (`BOOTLOADER_APP_ROLLBACK_ENABLE` is already on) and
-   coredump download.
-3. SD card: persistent logs (batched), timelapse per print, file browser.
-4. PrusaLink (Mini+ local API): upload only while printing.
-5. MQTT / Home Assistant, MJPEG/RTSP stream.
+See `CHANGELOG.md` (`[Unreleased]` → *Pending*). The core features run on a test board (OV3660
+sensor): web UI, login, WiFi and PrusaConnect uploads. Built and host-tested but **not yet run on
+hardware**: fallback AP, factory reset, OTA/rollback, crash dumps, SD card, PrusaLink, MQTT and
+live view (ADR-0009 to ADR-0014). Next steps, in order:
+1. Flash, exercise each of those on the board, and fix what breaks.
+2. 48 h soak against PrusaConnect with `tools/soak.py` (watch the minimum internal heap with
+   PrusaLink + MQTT + SD enabled).
+3. Possible later: signed OTA images, RTSP, notifications.
 
 Out of scope for this hardware: on-device vision/failure detection (no RAM/CPU). If added, it goes
 behind a `FrameAnalyzer` port with a *remote* adapter.

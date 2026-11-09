@@ -64,7 +64,10 @@ sends it messages.
 | `SnapshotService` | 1 | capture schedule, `FramePool` | ticks, `TriggerNow`, network events |
 | `ConnectUplink` | 1 | HTTPS client to PrusaConnect (keep-alive) | `Publish(frame)`, `SyncInfo` |
 | `NetworkActor` | 0 | WiFi STA/AP, NTP, mDNS | WiFi events, recovery orders |
-| `StorageActor` | 1 | SD card, log to disk | `AppendLog`, `WriteFile`, `Erase` |
+| `Storage` | 1 | SD card writes: daily logs, timelapse (ADR-0011) | frames (`FrameObserver`), 10 s log flush |
+| `PrinterMonitor` | 1 | PrusaLink HTTP polling (ADR-0012) | 10 s timer, settings changes |
+| `MqttBridge` | 1 | MQTT publishing to Home Assistant (ADR-0013) | frames, 30 s state timer, commands |
+| `LiveStream` | 1 | the one open MJPEG response (ADR-0014) | requests handed over by `httpd` |
 | `httpd` (ESP-IDF's) | 1 | HTTP sockets | requests; **never blocks** longer than a `send` to a queue |
 
 ### 4.1 Frames: `FramePool` + `FrameRef`
@@ -163,8 +166,10 @@ firmware-byclaude/
 
 ## 12. Vertical slices
 
-1. **Snapshot → PrusaConnect** with Kconfig/NVS config, metrics and logs. *(minimum useful)*
-2. Web: login, status, snapshot, camera/Connect/network settings.
-3. OTA with rollback + coredump.
-4. SD: persistent logs, timelapse, file browser.
-5. PrusaLink (upload only while printing), MQTT/Home Assistant, stream.
+1. **Snapshot → PrusaConnect** with Kconfig/NVS config, metrics and logs. *(minimum useful)* ✅
+2. Web: login, status, snapshot, camera/Connect/network settings. ✅
+3. OTA with rollback + coredump. ✅ (ADR-0010)
+4. SD: persistent logs, timelapse, file browser. ✅ (ADR-0011)
+5. PrusaLink (upload only while printing), MQTT/Home Assistant, stream. ✅ (ADR-0012–0014)
+
+Slices 3–5 are built and host-tested; hardware validation and the 48 h soak are pending.

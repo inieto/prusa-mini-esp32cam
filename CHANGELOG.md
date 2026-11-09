@@ -7,7 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
-- On-device web server with the embedded UI (gzip, ~18 KB, served with an ETag).
+- On-device web server with the embedded UI (gzip, ~22 KB, served with an ETag).
 - Login without a factory password: the first user is created from the web UI during the first
   15 minutes after power-on. PBKDF2-SHA256, `HttpOnly; SameSite=Strict` cookie, 30 s lockout
   after 5 failed attempts (S1, S2, S5).
@@ -57,7 +57,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
   (ADR-0014).
 - `tools/soak.py`: long-running reliability check against a real camera (upload success
   rate, reboots, RSSI, minimum heap) with a PASS/FAIL verdict.
-- Portable core with 47 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
+- Portable core with 64 tests on the Mac (GoogleTest + AddressSanitizer/UBSan).
 - `AGENTS.md` (and `CLAUDE.md`, which imports it) with architecture invariants, commands and
   conventions for AI agents and contributors; ADR index and template.
 

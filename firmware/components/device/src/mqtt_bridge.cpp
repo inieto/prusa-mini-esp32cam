@@ -34,7 +34,10 @@ void MqttBridge::start(const MqttSettings& settings, core::mqtt::Identity identi
     std::lock_guard lock(mutex_);
     settings_ = settings;
   }
-  xTaskCreatePinnedToCore(task_entry, "mqtt_bridge", kStack, this, 2, &task_, 1);
+  // Like the esp-mqtt client itself, the bridge task only exists once a broker is configured.
+  if (!settings.uri.empty()) {
+    xTaskCreatePinnedToCore(task_entry, "mqtt_bridge", kStack, this, 2, &task_, 1);
+  }
 }
 
 void MqttBridge::set_settings(const MqttSettings& settings) {
@@ -43,7 +46,11 @@ void MqttBridge::set_settings(const MqttSettings& settings) {
     settings_ = settings;
   }
   restart_pending_ = true;
-  if (task_) xTaskNotifyGive(task_);
+  if (task_) {
+    xTaskNotifyGive(task_);
+  } else if (!settings.uri.empty()) {
+    xTaskCreatePinnedToCore(task_entry, "mqtt_bridge", kStack, this, 2, &task_, 1);
+  }
 }
 
 MqttSettings MqttBridge::settings() const {

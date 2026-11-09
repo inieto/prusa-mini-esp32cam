@@ -41,7 +41,10 @@ void PrinterMonitor::start(const PrinterSettings& settings) {
     std::lock_guard lock(mutex_);
     settings_ = settings;
   }
-  xTaskCreatePinnedToCore(task_entry, "printer", kStack, this, 3, &task_, 1);
+  // Internal RAM is scarce (TLS + WiFi): the task only exists once PrusaLink is configured.
+  if (!settings.host.empty()) {
+    xTaskCreatePinnedToCore(task_entry, "printer", kStack, this, 3, &task_, 1);
+  }
 }
 
 void PrinterMonitor::set_settings(const PrinterSettings& settings) {
@@ -53,7 +56,11 @@ void PrinterMonitor::set_settings(const PrinterSettings& settings) {
     failures_ = 0;
   }
   reachable_ = false;
-  if (task_) xTaskNotifyGive(task_);
+  if (task_) {
+    xTaskNotifyGive(task_);
+  } else if (!settings.host.empty()) {
+    xTaskCreatePinnedToCore(task_entry, "printer", kStack, this, 3, &task_, 1);
+  }
 }
 
 PrinterSettings PrinterMonitor::settings() const {
