@@ -55,6 +55,7 @@ class WebServer {
 
   Deps d_;
   httpd_handle_t server_ = nullptr;
+  std::string etag_;  // UI bundle hash + firmware build hash, quoted
 };
 
 }  // namespace device

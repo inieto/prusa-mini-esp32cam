@@ -32,10 +32,16 @@ v1.1.2 (auditoría todavía no publicada en el repo).
   solo cuando la red realmente falla (B1, B2).
 - El detector de brownout queda activo y los reinicios por baja tensión quedan registrados.
 
+### Corregido
+- La web se mostraba como HTML en crudo: el `Content-Type` de los archivos de la UI apuntaba a
+  memoria ya liberada. Probado en hardware (placa con OV3660).
+- La ETag de la UI ahora incluye el hash del firmware, así una actualización que cambia las
+  cabeceras no queda tapada por una respuesta vieja en la caché del navegador.
+
 ### Compatibilidad
 - Se reproduce el *fingerprint* de v1.1.2: con el mismo token, PrusaConnect sigue reconociendo
   la cámara migrada.
 
 ### Pendiente
-- Primera prueba en hardware.
+- Soak de 48 h contra PrusaConnect en hardware.
 - OTA por web con rollback, coredump descargable, logs y timelapse en SD, PrusaLink.

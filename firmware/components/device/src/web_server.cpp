@@ -1,10 +1,12 @@
 #include "device/web_server.hpp"
 
 #include <cJSON.h>
+#include <esp_app_desc.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 
+#include <cstdio>
 #include <memory>
 
 #include "core/settings_json.hpp"
@@ -109,6 +111,15 @@ std::span<const uint8_t> embedded_web_bundle() {
 }
 
 core::Result<void> WebServer::start() {
+  // The ETag must change with the firmware, not only with the UI files: a firmware fix that
+  // changes response headers (e.g. Content-Type) would otherwise be masked by 304 replies
+  // to a response the browser cached from the old build.
+  const auto* app = esp_app_get_description();
+  char build[9];
+  std::snprintf(build, sizeof build, "%02x%02x%02x%02x", app->app_elf_sha256[0],
+                app->app_elf_sha256[1], app->app_elf_sha256[2], app->app_elf_sha256[3]);
+  etag_ = "\"" + std::string(d_.bundle.etag()) + "-" + build + "\"";
+
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 8;
@@ -143,12 +154,15 @@ esp_err_t WebServer::on_static(httpd_req_t* req) {
     return httpd_resp_send(req, "Not found", HTTPD_RESP_USE_STRLEN);
   }
 
-  const std::string etag = "\"" + std::string(self->d_.bundle.etag()) + "\"";
+  const std::string& etag = self->etag_;
   if (header(req, "If-None-Match") == etag) {
     httpd_resp_set_status(req, "304 Not Modified");
     return httpd_resp_send(req, nullptr, 0);
   }
-  httpd_resp_set_type(req, std::string(asset->content_type).c_str());
+  // httpd_resp_set_type/set_hdr store the pointer, not a copy: the string must outlive
+  // httpd_resp_send. A temporary here left a dangling Content-Type (raw HTML shown).
+  const std::string content_type(asset->content_type);
+  httpd_resp_set_type(req, content_type.c_str());
   httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
   httpd_resp_set_hdr(req, "ETag", etag.c_str());
   httpd_resp_set_hdr(req, "Cache-Control", "no-cache");  // revalidate: updates show at once
