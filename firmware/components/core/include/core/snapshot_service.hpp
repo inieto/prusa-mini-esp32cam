@@ -3,6 +3,7 @@
 // call from other tasks (e.g. the HTTP server).
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -63,6 +64,11 @@ class SnapshotService {
 
   SnapshotService(Deps deps, Options options, connect::CameraIdentity identity);
 
+  // Wiring, before the owning task starts (not thread-safe). Observers see every scheduled
+  // capture, uploaded or not. Up to kMaxObservers.
+  void add_observer(FrameObserver& observer);
+  static constexpr size_t kMaxObservers = 4;
+
   // Drive from the owning task roughly once per second.
   void tick();
 
@@ -87,6 +93,8 @@ class SnapshotService {
   Backoff backoff_;
   ConnectivityRecovery recovery_;
   std::optional<Millis> next_info_at_;  // empty = sync as soon as possible
+  std::array<FrameObserver*, kMaxObservers> observers_{};
+  size_t observer_count_ = 0;
 
   std::atomic<bool> snapshot_requested_{false};
   std::atomic<bool> info_requested_{false};

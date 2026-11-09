@@ -12,6 +12,7 @@
 #include <new>
 
 #include "core/settings_json.hpp"
+#include "core/storage_policy.hpp"
 #include "device/diagnostics.hpp"
 #include "device/factory_reset.hpp"
 #include "device/firmware.hpp"
@@ -90,6 +91,26 @@ bool recv_exact(httpd_req_t* req, std::span<uint8_t> out) {
     got += static_cast<size_t>(n);
   }
   return true;
+}
+
+// ?path=… decoded and sanitised (relative to the SD root); empty optional when invalid.
+std::optional<std::string> path_param(httpd_req_t* req) {
+  const size_t len = httpd_req_get_url_query_len(req);
+  if (len == 0) return std::string();
+  if (len > 512) return std::nullopt;
+  std::string query(len + 1, '\0');
+  if (httpd_req_get_url_query_str(req, query.data(), query.size()) != ESP_OK) return std::nullopt;
+  char raw[384];
+  if (httpd_query_key_value(query.c_str(), "path", raw, sizeof raw) != ESP_OK) return std::string();
+  const auto decoded = core::url_decode(raw);
+  if (!decoded) return std::nullopt;
+  return core::sanitize_relative_path(*decoded);
+}
+
+const char* content_type_for(std::string_view name) {
+  if (name.ends_with(".jpg") || name.ends_with(".jpeg")) return "image/jpeg";
+  if (name.ends_with(".log") || name.ends_with(".txt")) return "text/plain; charset=utf-8";
+  return "application/octet-stream";
 }
 
 bool is_valid_hostname(std::string_view h) {
@@ -240,6 +261,10 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
     return httpd_resp_send(req, logs.data(), static_cast<ssize_t>(logs.size()));
   }
   if (get && route == "wifi/scan") return wifi_scan(req);
+  if ((get || put) && route == "config/storage") return storage_config(req, put);
+  if (get && route == "sd") return sd_status(req);
+  if (get && route == "sd/list") return sd_list(req);
+  if (get && route == "sd/file") return sd_file(req);
   if (post && route == "ota") return ota_upload(req);
   if (get && route == "coredump") return get_coredump(req);
   if ((get || put) && route == "config/camera") return camera_config(req, put);
@@ -262,6 +287,7 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
       reboot_later(d_.system);
       return send_json(req, "202 Accepted", R"({"ok":true})");
     }
+    if (route == "sd/delete") return sd_delete(req, *body);
     if (route == "coredump/erase") {
       erase_coredump();
       return send_json(req, "200 OK", R"({"ok":true})");
@@ -552,6 +578,117 @@ esp_err_t WebServer::get_coredump(httpd_req_t* req) {
     offset += n;
   }
   return httpd_resp_send_chunk(req, nullptr, 0);
+}
+
+esp_err_t WebServer::storage_config(httpd_req_t* req, bool update) {
+  core::StorageSettings s = d_.storage.settings();
+  if (update) {
+    const auto body = read_json_body(req);
+    if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
+    JsonPtr j(cJSON_ParseWithLength(body->data(), body->size()));
+    if (!j || !cJSON_IsObject(j.get())) return send_error(req, "400 Bad Request", "invalid JSON");
+    int known = 0;
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(j.get(), "log_to_sd")) {
+      if (!cJSON_IsBool(v)) return send_error(req, "400 Bad Request", "invalid value");
+      s.log_to_sd = cJSON_IsTrue(v);
+      ++known;
+    }
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(j.get(), "timelapse")) {
+      const auto mode = cJSON_IsString(v) ? core::timelapse_mode_from(v->valuestring) : std::nullopt;
+      if (!mode) return send_error(req, "400 Bad Request", "invalid timelapse mode");
+      s.timelapse = *mode;
+      ++known;
+    }
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(j.get(), "timelapse_interval_s")) {
+      if (!cJSON_IsNumber(v) || v->valuedouble < 10 || v->valuedouble > 3600) {
+        return send_error(req, "400 Bad Request", "interval must be 10 to 3600 s");
+      }
+      s.timelapse_interval_s = static_cast<uint16_t>(v->valueint);
+      ++known;
+    }
+    if (known != cJSON_GetArraySize(j.get())) return send_error(req, "400 Bad Request", "unknown field");
+    if (auto r = d_.store.save_storage(s); !r) {
+      return send_error(req, "500 Internal Server Error", "could not save");
+    }
+    d_.storage.set_settings(s);
+  }
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddBoolToObject(j.get(), "log_to_sd", s.log_to_sd);
+  cJSON_AddStringToObject(j.get(), "timelapse", std::string(core::to_string(s.timelapse)).c_str());
+  cJSON_AddNumberToObject(j.get(), "timelapse_interval_s", s.timelapse_interval_s);
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::sd_status(httpd_req_t* req) {
+  const SdUsage u = d_.storage.usage();
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddBoolToObject(j.get(), "mounted", u.mounted);
+  cJSON_AddNumberToObject(j.get(), "total_bytes", static_cast<double>(u.total_bytes));
+  cJSON_AddNumberToObject(j.get(), "free_bytes", static_cast<double>(u.free_bytes));
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::sd_list(httpd_req_t* req) {
+  const auto path = path_param(req);
+  if (!path) return send_error(req, "400 Bad Request", "invalid path");
+  const auto entries = d_.storage.list(*path);
+  if (!entries) {
+    return entries.error().code == core::Errc::NotFound
+               ? send_error(req, "404 Not Found", "no such folder")
+               : send_error(req, "409 Conflict", "no SD card");
+  }
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddStringToObject(j.get(), "path", path->c_str());
+  cJSON* list = cJSON_AddArrayToObject(j.get(), "entries");
+  for (const SdEntry& e : *entries) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddStringToObject(item, "name", e.name.c_str());
+    cJSON_AddBoolToObject(item, "dir", e.dir);
+    cJSON_AddNumberToObject(item, "size", e.size);
+    cJSON_AddItemToArray(list, item);
+  }
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::sd_file(httpd_req_t* req) {
+  const auto path = path_param(req);
+  if (!path || path->empty()) return send_error(req, "400 Bad Request", "invalid path");
+  if (!d_.storage.usage().mounted) return send_error(req, "409 Conflict", "no SD card");
+  FILE* f = std::fopen(Storage::absolute(*path).c_str(), "rb");
+  if (!f) return send_error(req, "404 Not Found", "no such file");
+  const std::string name = path->substr(path->rfind('/') == std::string::npos ? 0 : path->rfind('/') + 1);
+  const char* type = content_type_for(name);
+  httpd_resp_set_type(req, type);  // string literal: outlives the response
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+  httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
+  // Only images open inline; anything else downloads (no HTML can be served from the card).
+  const std::string disposition =
+      std::string(std::string_view(type).starts_with("image/") ? "inline" : "attachment") +
+      "; filename=\"" + name + "\"";
+  httpd_resp_set_hdr(req, "Content-Disposition", disposition.c_str());
+  constexpr size_t kChunk = 4096;
+  std::unique_ptr<char[]> buffer(new (std::nothrow) char[kChunk]);
+  esp_err_t err = buffer ? ESP_OK : ESP_ERR_NO_MEM;
+  while (err == ESP_OK) {
+    const size_t n = std::fread(buffer.get(), 1, kChunk, f);
+    if (n == 0) break;
+    err = httpd_resp_send_chunk(req, buffer.get(), static_cast<ssize_t>(n));
+  }
+  std::fclose(f);
+  if (err != ESP_OK) return ESP_FAIL;
+  return httpd_resp_send_chunk(req, nullptr, 0);
+}
+
+esp_err_t WebServer::sd_delete(httpd_req_t* req, std::string_view body) {
+  JsonPtr j(cJSON_ParseWithLength(body.data(), body.size()));
+  const std::string raw = j ? json_string(j.get(), "path") : "";
+  const auto path = core::sanitize_relative_path(raw);
+  if (!path || path->empty()) return send_error(req, "400 Bad Request", "invalid path");
+  if (auto r = d_.storage.remove(*path); !r) {
+    return r.error().code == core::Errc::NotFound ? send_error(req, "404 Not Found", "no such file")
+                                                   : send_error(req, "409 Conflict", "no SD card");
+  }
+  return send_json(req, "200 OK", R"({"ok":true})");
 }
 
 esp_err_t WebServer::wifi_scan(httpd_req_t* req) {

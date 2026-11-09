@@ -11,6 +11,7 @@ import time
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web" / "src"
@@ -34,6 +35,11 @@ state = {
     "network": {"ssid": "nietogiardinieri", "password_set": True, "hostname": "prusa-esp32cam"},
     "coredump": {"size": 65536 - 4096, "task": "httpd", "pc": "0x400d1234",
                  "reason": "LoadProhibited"},  # set to None to simulate a clean device
+    "storage": {"log_to_sd": True, "timelapse": "printing", "timelapse_interval_s": 60},
+    "sd": {  # fake card: folders are dicts, files are sizes
+        "logs": {"2026-11-08.log": 18_200, "2026-11-09.log": 4_096},
+        "timelapse": {"2026-11-09_1200_Benchy": {"120005.jpg": 61_000, "120105.jpg": 60_500}},
+    },
     "seq": 1,
     "uploads_ok": 42,
 }
@@ -147,6 +153,38 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "light" and method == "POST":
             state["light"] = bool(self.read_json().get("on"))
+            return self.send_json({"ok": True})
+        if path == "sd":
+            return self.send_json({"mounted": True, "total_bytes": 31_910_000_000,
+                                   "free_bytes": 30_100_000_000})
+        if path in ("sd/list", "sd/file"):
+            query = parse_qs(urlparse(self.path).query)
+            parts = [p for p in query.get("path", [""])[0].split("/") if p]
+            node = state["sd"]
+            for p in parts:
+                if not isinstance(node, dict) or p not in node:
+                    return self.send_json({"error": "no such file"}, HTTPStatus.NOT_FOUND)
+                node = node[p]
+            if path == "sd/list":
+                if not isinstance(node, dict):
+                    return self.send_json({"error": "no such folder"}, HTTPStatus.NOT_FOUND)
+                return self.send_json({"path": "/".join(parts), "entries": [
+                    {"name": k, "dir": isinstance(v, dict), "size": 0 if isinstance(v, dict) else v}
+                    for k, v in node.items()]})
+            data = SAMPLE.read_bytes() if parts[-1].endswith(".jpg") else b"00:00:01 I mock log\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg" if parts[-1].endswith(".jpg") else "text/plain")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+        if path == "sd/delete" and method == "POST":
+            parts = [p for p in self.read_json().get("path", "").split("/") if p]
+            node = state["sd"]
+            for p in parts[:-1]:
+                node = node.get(p, {})
+            if not parts or parts[-1] not in node:
+                return self.send_json({"error": "no such file"}, HTTPStatus.NOT_FOUND)
+            del node[parts[-1]]
             return self.send_json({"ok": True})
         if path == "ota" and method == "POST":
             if self.headers.get("Content-Type") != "application/octet-stream":

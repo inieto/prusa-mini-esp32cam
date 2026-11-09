@@ -50,6 +50,19 @@ TEST_F(SnapshotServiceTest, UploadsImmediatelyThenEveryInterval) {
   EXPECT_TRUE(s.latest_frame());
 }
 
+TEST_F(SnapshotServiceTest, ObserversSeeEveryScheduledFrameEvenOffline) {
+  struct Counter : core::FrameObserver {
+    uint32_t frames = 0;
+    void on_frame(const core::FrameRef& f) override { frames += f ? 1 : 0; }
+  } counter;
+  network.up = false;  // timelapse must keep recording while PrusaConnect is unreachable
+  auto s = make({.default_interval = 30 * kSec});
+  s.add_observer(counter);
+  run(s, 61 * kSec);
+  EXPECT_EQ(counter.frames, 3u);
+  EXPECT_EQ(connect.uploads, 0u);
+}
+
 TEST_F(SnapshotServiceTest, FollowsTriggerSchemeFromPrusaConnect) {
   connect.info_results.push_back(std::string(R"({"config":{"trigger_scheme":"TEN_SEC"}})"));
   auto s = make({.default_interval = 60 * kSec});

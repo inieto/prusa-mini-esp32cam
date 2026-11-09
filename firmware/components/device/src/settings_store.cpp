@@ -51,11 +51,15 @@ class Nvs {
 };
 
 static_assert(std::is_trivially_copyable_v<core::CameraSettings>, "stored as raw NVS blob");
+static_assert(std::is_trivially_copyable_v<core::StorageSettings>, "stored as raw NVS blob");
 
-struct CameraBlob {
+template <class Settings>
+struct Blob {
   uint8_t schema;
-  core::CameraSettings settings;
+  Settings settings;
 };
+using CameraBlob = Blob<core::CameraSettings>;
+using StorageBlob = Blob<core::StorageSettings>;
 
 }  // namespace
 
@@ -120,6 +124,26 @@ core::Result<void> SettingsStore::save_camera(const core::CameraSettings& camera
   blob.schema = kCameraSchema;
   blob.settings = camera;
   Nvs nvs("camera", NVS_READWRITE);
+  nvs.set_blob("settings", &blob, sizeof blob);
+  return nvs.commit();
+}
+
+core::StorageSettings SettingsStore::load_storage() const {
+  Nvs nvs("storage", NVS_READONLY);
+  StorageBlob blob{};
+  if (nvs.blob("settings", &blob, sizeof blob) && blob.schema == kStorageSchema &&
+      core::valid(blob.settings)) {
+    return blob.settings;
+  }
+  return {};
+}
+
+core::Result<void> SettingsStore::save_storage(const core::StorageSettings& storage) {
+  if (!core::valid(storage)) return core::fail(core::Errc::OutOfRange);
+  StorageBlob blob{};
+  blob.schema = kStorageSchema;
+  blob.settings = storage;
+  Nvs nvs("storage", NVS_READWRITE);
   nvs.set_blob("settings", &blob, sizeof blob);
   return nvs.commit();
 }

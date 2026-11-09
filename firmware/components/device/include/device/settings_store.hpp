@@ -6,6 +6,7 @@
 #include <string>
 
 #include "core/camera_settings.hpp"
+#include "core/storage_policy.hpp"
 #include "device/connect_client.hpp"
 
 namespace device {
@@ -29,8 +30,12 @@ class SettingsStore {
   core::CameraSettings load_camera() const;
   core::Result<void> save_camera(const core::CameraSettings& camera);
 
+  core::StorageSettings load_storage() const;
+  core::Result<void> save_storage(const core::StorageSettings& storage);
+
  private:
   static constexpr uint8_t kCameraSchema = 1;
+  static constexpr uint8_t kStorageSchema = 1;
 };
 
 }  // namespace device

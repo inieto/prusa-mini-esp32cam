@@ -41,6 +41,13 @@ struct SystemControl {
   virtual void reboot(RebootReason reason) = 0;
 };
 
+// Something that wants every scheduled capture (timelapse, MQTT). Called from the capture
+// task: implementations must not block (enqueue the FrameRef and return).
+struct FrameObserver {
+  virtual ~FrameObserver() = default;
+  virtual void on_frame(const FrameRef& frame) = 0;
+};
+
 enum class LogLevel : uint8_t { Error, Warn, Info, Debug };
 
 struct Log {

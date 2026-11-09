@@ -13,6 +13,7 @@
 #include "device/connect_client.hpp"
 #include "device/network.hpp"
 #include "device/settings_store.hpp"
+#include "device/storage.hpp"
 
 namespace device {
 
@@ -26,6 +27,7 @@ class WebServer {
     EspCamera& camera;
     PrusaConnectClient& connect;
     SettingsStore& store;
+    Storage& storage;
     Network& network;
     core::SystemControl& system;
     Auth& auth;
@@ -52,6 +54,11 @@ class WebServer {
   esp_err_t wifi_scan(httpd_req_t* req);
   esp_err_t ota_upload(httpd_req_t* req);
   esp_err_t get_coredump(httpd_req_t* req);
+  esp_err_t storage_config(httpd_req_t* req, bool update);
+  esp_err_t sd_status(httpd_req_t* req);
+  esp_err_t sd_list(httpd_req_t* req);
+  esp_err_t sd_file(httpd_req_t* req);
+  esp_err_t sd_delete(httpd_req_t* req, std::string_view body);
 
   bool is_authenticated(httpd_req_t* req) const;
 

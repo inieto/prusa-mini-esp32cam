@@ -19,6 +19,7 @@ char* g_ring = nullptr;
 size_t g_capacity = 0;
 size_t g_head = 0;  // next write position
 bool g_wrapped = false;
+uint64_t g_total = 0;  // bytes ever written, for incremental readers (SD log)
 portMUX_TYPE g_ring_lock = portMUX_INITIALIZER_UNLOCKED;
 vprintf_like_t g_previous = nullptr;
 
@@ -38,6 +39,7 @@ int tee_vprintf(const char* fmt, va_list args) {
         g_wrapped = true;
       }
     }
+    g_total += static_cast<uint64_t>(n);
     portEXIT_CRITICAL(&g_ring_lock);
   }
   return g_previous ? g_previous(fmt, args) : std::vprintf(fmt, args);
@@ -82,6 +84,37 @@ std::string log_snapshot() {
     out.erase(0, first_line == std::string::npos ? 0 : first_line + 1);
   }
   out.append(tmp, 0, head);
+  return out;
+}
+
+std::string log_read_since(uint64_t& cursor) {
+  std::string out;
+  if (!g_ring) return out;
+  portENTER_CRITICAL(&g_ring_lock);
+  const uint64_t total = g_total;
+  const uint64_t oldest = total > g_capacity ? total - g_capacity : 0;
+  const uint64_t from = std::max(cursor, oldest);
+  const size_t len = static_cast<size_t>(total - from);
+  portEXIT_CRITICAL(&g_ring_lock);
+  if (len == 0) {
+    cursor = total;
+    return out;
+  }
+  out.resize(len);  // allocate outside the critical section
+  portENTER_CRITICAL(&g_ring_lock);
+  // Re-read: more may have been written; copy exactly [from, from + len) if still in the ring.
+  const uint64_t now_oldest = g_total > g_capacity ? g_total - g_capacity : 0;
+  if (from >= now_oldest) {
+    size_t pos = static_cast<size_t>(from % g_capacity);
+    for (size_t i = 0; i < len; ++i) {
+      out[i] = g_ring[pos];
+      if (++pos == g_capacity) pos = 0;
+    }
+  } else {
+    out.clear();  // overwritten while we allocated: skip, next call resumes at the oldest data
+  }
+  portEXIT_CRITICAL(&g_ring_lock);
+  cursor = from + len;
   return out;
 }
 

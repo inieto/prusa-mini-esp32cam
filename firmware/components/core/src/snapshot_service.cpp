@@ -45,6 +45,10 @@ SnapshotService::SnapshotService(Deps deps, Options options, connect::CameraIden
       deps.connect.configured() ? ConnectState::Starting : ConnectState::NotConfigured;
 }
 
+void SnapshotService::add_observer(FrameObserver& observer) {
+  if (observer_count_ < observers_.size()) observers_[observer_count_++] = &observer;
+}
+
 void SnapshotService::tick() {
   const Millis now = deps_.clock.now();
   const bool configured = deps_.connect.configured();
@@ -149,6 +153,7 @@ void SnapshotService::take_and_publish(Millis now) {
     std::lock_guard lock(mutex_);
     latest_ = *frame;
   }
+  for (size_t i = 0; i < observer_count_; ++i) observers_[i]->on_frame(*frame);
 
   if (!deps_.connect.configured() || !deps_.network.connected()) {
     scheduler_.schedule_after(now);  // local capture only (e.g. requested from the web UI)

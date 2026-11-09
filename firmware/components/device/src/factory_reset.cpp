@@ -17,7 +17,7 @@ constexpr int kReleaseWaitMs = 120'000;
 constexpr int kPollMs = 100;
 
 // NVS namespaces holding user configuration ("device" and "sys" are board facts and stay).
-constexpr const char* kUserNamespaces[] = {"wifi", "connect", "camera", "web", "mqtt", "link"};
+constexpr const char* kUserNamespaces[] = {"wifi", "connect", "camera", "web", "storage", "mqtt", "link"};
 
 void status_led(bool on) { gpio_set_level(board::kStatusLed, on ? 0 : 1); }  // active low
 

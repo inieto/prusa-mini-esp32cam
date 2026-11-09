@@ -146,6 +146,22 @@ const FORMS = {
     ],
     extra: () => wifiScanner(),
   },
+  storage: {
+    title: 'Storage',
+    endpoint: 'config/storage',
+    sections: [
+      ['SD card', [
+        { key: 'log_to_sd', label: 'Keep logs on the card', type: 'switch',
+          hint: 'One file per day in /logs, the last 14 days are kept' },
+        { key: 'timelapse', label: 'Timelapse', type: 'select',
+          options: [['off', 'Off'], ['always', 'Always'], ['printing', 'Only while printing (needs PrusaLink)']] },
+        { key: 'timelapse_interval_s', label: 'Timelapse interval', type: 'range', min: 10, max: 600, step: 10,
+          unit: 's', showIf: (v) => v.timelapse !== 'off',
+          hint: 'Frames come from the snapshot schedule, so the effective interval is never shorter than the PrusaConnect one' },
+      ]],
+    ],
+    extra: () => sdBrowser(),
+  },
 };
 
 function fieldControl(field, values, onChange) {
@@ -281,6 +297,60 @@ function wifiScanner() {
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {}, ['SSID', 'Signal', 'Channel', 'Security', ''].map((t) => h('th', { text: t })))),
       body));
+}
+
+function formatBytes(n) {
+  if (n >= 1 << 30) return `${(n / (1 << 30)).toFixed(1)} GB`;
+  if (n >= 1 << 20) return `${(n / (1 << 20)).toFixed(1)} MB`;
+  if (n >= 1 << 10) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
+function sdBrowser() {
+  const box = h('div', {});
+  let path = '';
+  const fileUrl = (p) => `${API}/sd/file?path=${encodeURIComponent(p)}`;
+  const load = async () => {
+    try {
+      const sd = await api('sd');
+      if (!sd.mounted) {
+        box.replaceChildren(h('h2', { text: 'Files' }), h('p', { class: 'lead', text: 'No SD card (FAT32, inserted before power-on or retried every minute).' }));
+        return;
+      }
+      const listing = await api(`sd/list?path=${encodeURIComponent(path)}`);
+      const crumbs = [h('a', { href: '#storage', text: 'card', onclick: (e) => { e.preventDefault(); path = ''; load(); } })];
+      let acc = '';
+      for (const part of path ? path.split('/') : []) {
+        acc = acc ? `${acc}/${part}` : part;
+        const target = acc;
+        crumbs.push(' / ', h('a', { href: '#storage', text: part, onclick: (e) => { e.preventDefault(); path = target; load(); } }));
+      }
+      const entries = listing.entries.sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
+      box.replaceChildren(
+        h('h2', { text: 'Files' }),
+        h('p', { class: 'lead' }, `${formatBytes(sd.free_bytes)} free of ${formatBytes(sd.total_bytes)} · `, ...crumbs),
+        h('table', { class: 'data' },
+          h('thead', {}, h('tr', {}, ['Name', 'Size', ''].map((t) => h('th', { text: t })))),
+          h('tbody', {}, entries.length ? entries.map((e) => {
+            const full = path ? `${path}/${e.name}` : e.name;
+            const name = e.dir
+              ? h('a', { href: '#storage', text: `${e.name}/`, onclick: (ev) => { ev.preventDefault(); path = full; load(); } })
+              : h('a', { href: fileUrl(full), target: '_blank', rel: 'noopener', text: e.name });
+            return h('tr', {},
+              h('td', {}, name),
+              h('td', { text: e.dir ? '—' : formatBytes(e.size) }),
+              h('td', {}, confirmButton('Delete', 'Confirm', async () => {
+                await action('sd/delete', { path: full }, `Deleted ${e.name}`);
+                load();
+              })));
+          }) : h('tr', {}, h('td', { text: 'empty' }), h('td'), h('td')))),
+        h('p', { class: 'hint', text: 'Make a video from a timelapse folder: ffmpeg -framerate 24 -pattern_type glob -i "*.jpg" timelapse.mp4' }));
+    } catch (e) {
+      if (!(e instanceof Unauthorized)) box.replaceChildren(h('p', { text: `Error: ${e.message}` }));
+    }
+  };
+  load();
+  return box;
 }
 
 // Two-step button for destructive actions (no modal dialogs: they block the page).
@@ -436,7 +506,8 @@ async function refreshStatus() {
 
 // ---------- routing ----------
 const ROUTES = { camera: () => renderForm('camera'), connect: () => renderForm('connect'),
-                 network: () => renderForm('network'), system: renderSystem };
+                 network: () => renderForm('network'), storage: () => renderForm('storage'),
+                 system: renderSystem };
 
 async function route() {
   const name = (location.hash || '#camera').slice(1);

@@ -276,3 +276,4 @@ footer a { color: var(--muted-2); }
 
 progress { width: 178px; accent-color: var(--orange); }
 .value input[type=file] { font-size: 12px; max-width: 100%; }
+p.hint { font-size: 11px; color: var(--muted); }

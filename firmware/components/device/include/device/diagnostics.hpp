@@ -10,6 +10,9 @@ namespace device {
 // Tees every ESP_LOG line into a ring buffer in PSRAM (visible in the web UI).
 void install_log_buffer(size_t capacity);
 std::string log_snapshot();
+// Log text written since `cursor` (a running byte count, start at 0); advances the cursor.
+// If more than the ring holds was written meanwhile, the oldest part is lost.
+std::string log_read_since(uint64_t& cursor);
 
 struct ResetRecord {
   std::string reason;
