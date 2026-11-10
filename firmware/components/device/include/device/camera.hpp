@@ -26,6 +26,8 @@ class EspCamera final : public core::CameraPort {
   core::Resolution max_resolution() const { return max_resolution_; }
   // Largest digital zoom (%) at a resolution; 100 when the sensor has no supported windowing.
   uint16_t max_zoom_pct(core::Resolution r) const;
+  // Sharpness and denoise exist in the OV3660/OV5640 drivers, not in the OV2640 one.
+  bool supports_sharpness() const;
   bool supports(core::Resolution r) const { return r <= max_resolution_; }
 
   core::Result<core::FrameRef> capture(core::CaptureKind kind = core::CaptureKind::Snapshot) override;

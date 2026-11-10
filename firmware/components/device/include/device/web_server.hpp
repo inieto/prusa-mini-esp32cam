@@ -14,6 +14,7 @@
 #include "device/live_stream.hpp"
 #include "device/network.hpp"
 #include "device/settings_store.hpp"
+#include "device/status_led.hpp"
 #include "device/storage.hpp"
 
 namespace device {
@@ -32,6 +33,7 @@ class WebServer {
     PrinterMonitor& printer;
     MqttBridge& mqtt;
     LiveStream& stream;
+    StatusLed& led;
     Network& network;
     core::SystemControl& system;
     Auth& auth;
@@ -61,12 +63,14 @@ class WebServer {
   esp_err_t storage_config(httpd_req_t* req, bool update);
   esp_err_t printer_config(httpd_req_t* req, bool update);
   esp_err_t mqtt_config(httpd_req_t* req, bool update);
+  esp_err_t device_config(httpd_req_t* req, bool update);
   esp_err_t sd_status(httpd_req_t* req);
   esp_err_t sd_list(httpd_req_t* req);
   esp_err_t sd_file(httpd_req_t* req);
   esp_err_t sd_delete(httpd_req_t* req, std::string_view body);
 
   bool is_authenticated(httpd_req_t* req) const;
+  bool has_valid_api_token(httpd_req_t* req) const;
 
   Deps d_;
   httpd_handle_t server_ = nullptr;

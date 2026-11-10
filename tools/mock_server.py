@@ -29,6 +29,7 @@ state = {
         "manual_gain": 0, "auto_white_balance": True, "lens_correction": True,
         "flash_on_capture": False, "flash_lead_ms": 200, "flash_duty_pct": 80,
         "zoom_pct": 100, "pan_x": 0, "pan_y": 0, "live_jpeg_quality": 30,
+        "sharpness": 0, "denoise": 0, "wb_mode": 0, "supports_sharpness": True,
         "sensor": "OV3660", "max_resolution": "qxga", "max_zoom_pct": 256,  # read-only
     },
     "connect": {"token_set": True, "hostname": "connect.prusa3d.com",
@@ -41,6 +42,8 @@ state = {
                 "upload_only_while_printing": True},
     "mqtt": {"uri": "mqtt://192.168.0.10:1883", "user": "ha", "password_set": True,
              "publish_images": True, "connected": True},
+    "device": {"status_led": True},
+    "api_token": None,
     "storage": {"log_to_sd": True, "timelapse": "printing", "timelapse_interval_s": 60},
     "sd": {  # fake card: folders are dicts, files are sizes
         "logs": {"2026-11-08.log": 18_200, "2026-11-09.log": 4_096},
@@ -105,7 +108,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True}, headers=cookie)
             return self.send_json({"error": "wrong username or password"}, HTTPStatus.UNAUTHORIZED)
         if not self.authed():
-            return self.send_json({"error": "login required"}, HTTPStatus.UNAUTHORIZED)
+            # Read-only API token (ADR-0016): Bearer header or ?token=, only for watching.
+            token = (self.headers.get("Authorization") or "").removeprefix("Bearer ") or \
+                parse_qs(urlparse(self.path).query).get("token", [""])[0]
+            read_only = method == "GET" and path in ("status", "snapshot.jpg", "stream")
+            if not (read_only and state["api_token"] and token == state["api_token"]):
+                return self.send_json({"error": "login required"}, HTTPStatus.UNAUTHORIZED)
 
         if path == "status":
             return self.send_json({
@@ -234,6 +242,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self.wfile.write(data)
         if path == "coredump/erase" and method == "POST":
             state["coredump"] = None
+            return self.send_json({"ok": True})
+        if path == "api-token":
+            if method == "POST":
+                state["api_token"] = os.urandom(16).hex()
+                return self.send_json({"token": state["api_token"]})
+            return self.send_json({"set": state["api_token"] is not None})
+        if path == "api-token/revoke" and method == "POST":
+            state["api_token"] = None
             return self.send_json({"ok": True})
         if path == "factory-reset" and method == "POST":
             state["user"] = None

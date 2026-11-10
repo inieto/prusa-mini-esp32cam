@@ -228,6 +228,21 @@ bool WebServer::is_authenticated(httpd_req_t* req) const {
   return d_.auth.authenticated(header(req, "Cookie"), d_.clock.now());
 }
 
+// "Authorization: Bearer <token>", or "?token=<token>" for clients that cannot send headers
+// (MJPEG viewers, Home Assistant/Obico camera URLs). Read-only routes only (ADR-0016).
+bool WebServer::has_valid_api_token(httpd_req_t* req) const {
+  if (!d_.auth.has_api_token()) return false;
+  const std::string auth = header(req, "Authorization");
+  if (auth.starts_with("Bearer ")) return d_.auth.api_token_valid(std::string_view(auth).substr(7));
+  const size_t len = httpd_req_get_url_query_len(req);
+  if (len == 0 || len > 256) return false;
+  std::string query(len + 1, '\0');
+  char token[40] = {};
+  return httpd_req_get_url_query_str(req, query.data(), query.size()) == ESP_OK &&
+         httpd_query_key_value(query.c_str(), "token", token, sizeof token) == ESP_OK &&
+         d_.auth.api_token_valid(token);
+}
+
 esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
   const bool get = req->method == HTTP_GET;
   const bool post = req->method == HTTP_POST;
@@ -245,7 +260,16 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
   if (post && route == "login") return login_or_setup(req, false);
   if (post && route == "setup") return login_or_setup(req, true);
 
-  if (!is_authenticated(req)) return send_error(req, "401 Unauthorized", "login required");
+  if (!is_authenticated(req)) {
+    // The API token opens only what an integration needs to watch: never settings or actions.
+    const bool read_only = get && (route == "status" || route == "snapshot.jpg" || route == "stream");
+    if (!read_only || !has_valid_api_token(req)) {
+      return send_error(req, "401 Unauthorized", "login required");
+    }
+    if (route == "status") return get_status(req);
+    if (route == "snapshot.jpg") return get_snapshot(req);
+    return d_.stream.serve(req);
+  }
 
   if (post && route == "logout") {
     d_.auth.logout(header(req, "Cookie"));
@@ -262,9 +286,15 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
     return httpd_resp_send(req, logs.data(), static_cast<ssize_t>(logs.size()));
   }
   if (get && route == "wifi/scan") return wifi_scan(req);
+  if (get && route == "api-token") {
+    JsonPtr j(cJSON_CreateObject());
+    cJSON_AddBoolToObject(j.get(), "set", d_.auth.has_api_token());
+    return send_json(req, "200 OK", print(j.get()));
+  }
   if ((get || put) && route == "config/storage") return storage_config(req, put);
   if ((get || put) && route == "config/printer") return printer_config(req, put);
   if ((get || put) && route == "config/mqtt") return mqtt_config(req, put);
+  if ((get || put) && route == "config/device") return device_config(req, put);
   if (get && route == "sd") return sd_status(req);
   if (get && route == "sd/list") return sd_list(req);
   if (get && route == "sd/file") return sd_file(req);
@@ -295,6 +325,17 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
       return send_json(req, "202 Accepted", R"({"ok":true})");
     }
     if (route == "sd/delete") return sd_delete(req, *body);
+    if (route == "api-token") {
+      const auto token = d_.auth.generate_api_token();
+      if (!token) return send_error(req, "500 Internal Server Error", "could not save");
+      JsonPtr j(cJSON_CreateObject());
+      cJSON_AddStringToObject(j.get(), "token", token->c_str());  // shown once, only the hash stays
+      return send_json(req, "200 OK", print(j.get()));
+    }
+    if (route == "api-token/revoke") {
+      d_.auth.revoke_api_token();
+      return send_json(req, "200 OK", R"({"ok":true})");
+    }
     if (route == "coredump/erase") {
       erase_coredump();
       return send_json(req, "200 OK", R"({"ok":true})");
@@ -465,6 +506,7 @@ esp_err_t WebServer::camera_config(httpd_req_t* req, bool update) {
   cJSON_AddStringToObject(j.get(), "max_resolution",
                           std::string(core::resolution_name(d_.camera.max_resolution())).c_str());
   cJSON_AddNumberToObject(j.get(), "max_zoom_pct", d_.camera.max_zoom_pct(settings.resolution));
+  cJSON_AddBoolToObject(j.get(), "supports_sharpness", d_.camera.supports_sharpness());
   return send_json(req, "200 OK", print(j.get()));
 }
 
@@ -722,6 +764,20 @@ esp_err_t WebServer::mqtt_config(httpd_req_t* req, bool update) {
   cJSON_AddBoolToObject(j.get(), "password_set", !m.password.empty());
   cJSON_AddBoolToObject(j.get(), "publish_images", m.publish_images);
   cJSON_AddBoolToObject(j.get(), "connected", d_.mqtt.connected());
+  return send_json(req, "200 OK", print(j.get()));
+}
+
+esp_err_t WebServer::device_config(httpd_req_t* req, bool update) {
+  if (update) {
+    const auto body = read_json_body(req);
+    if (!body) return send_error(req, "415 Unsupported Media Type", "JSON body required");
+    JsonPtr j(cJSON_ParseWithLength(body->data(), body->size()));
+    const cJSON* led = j ? cJSON_GetObjectItemCaseSensitive(j.get(), "status_led") : nullptr;
+    if (!cJSON_IsBool(led)) return send_error(req, "400 Bad Request", "invalid value");
+    d_.led.set_enabled(cJSON_IsTrue(led));
+  }
+  JsonPtr j(cJSON_CreateObject());
+  cJSON_AddBoolToObject(j.get(), "status_led", d_.led.enabled());
   return send_json(req, "200 OK", print(j.get()));
 }
 

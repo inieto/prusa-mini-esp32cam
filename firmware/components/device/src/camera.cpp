@@ -96,6 +96,10 @@ core::Result<void> EspCamera::init(const core::CameraSettings& settings) {
   return {};
 }
 
+bool EspCamera::supports_sharpness() const {
+  return sensor_pid_ == OV3660_PID || sensor_pid_ == OV5640_PID;
+}
+
 uint16_t EspCamera::max_zoom_pct(core::Resolution r) const {
   if (sensor_pid_ != OV3660_PID && sensor_pid_ != OV2640_PID) return 100;
   return core::max_zoom_pct(sensor_size_, core::size_of(r));
@@ -207,6 +211,11 @@ void EspCamera::apply_sensor(const core::CameraSettings& s) {
   sensor->set_gainceiling(sensor, static_cast<gainceiling_t>(s.gain_ceiling));
   sensor->set_whitebal(sensor, s.auto_white_balance);
   sensor->set_awb_gain(sensor, s.auto_white_balance);
+  sensor->set_wb_mode(sensor, s.wb_mode);
+  if (supports_sharpness()) {
+    sensor->set_sharpness(sensor, s.sharpness);
+    sensor->set_denoise(sensor, s.denoise);
+  }
   sensor->set_hmirror(sensor, s.hmirror);
   sensor->set_vflip(sensor, s.vflip);
   sensor->set_lenc(sensor, s.lens_correction);

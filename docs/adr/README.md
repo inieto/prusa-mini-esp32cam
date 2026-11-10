@@ -9,7 +9,7 @@ it. Template: [`0000-template.md`](0000-template.md).
 | [0002](0002-hexagonal-core.md) | Portable hexagonal core, without ESP-IDF | accepted |
 | [0003](0003-actors-framepool.md) | Single-owner actors and a reference-counted FramePool | accepted |
 | [0004](0004-connectivity-recovery.md) | Staged connectivity recovery | accepted (amended by 0009) |
-| [0005](0005-security-defaults.md) | Secure by default | accepted (amended by 0009, 0010) |
+| [0005](0005-security-defaults.md) | Secure by default | accepted (amended by 0009, 0010, 0016) |
 | [0006](0006-tls-memory.md) | mbedTLS in PSRAM and a persistent connection | accepted |
 | [0007](0007-web-ui.md) | Vanilla web UI with the Prusa look, embedded gzipped | accepted |
 | [0008](0008-partitions.md) | Partition table (4 MB) | accepted |
@@ -20,3 +20,4 @@ it. Template: [`0000-template.md`](0000-template.md).
 | [0013](0013-mqtt-home-assistant.md) | MQTT bridge with Home Assistant discovery, plain MQTT only | accepted |
 | [0014](0014-mjpeg-live-stream.md) | MJPEG live view through an async HTTP handler, one viewer | accepted |
 | [0015](0015-sensor-framing.md) | Digital zoom and pan through the sensor's windowing | accepted |
+| [0016](0016-read-only-api-token.md) | Read-only API token for integrations | accepted |

@@ -46,7 +46,8 @@ class SettingsStore {
   core::Result<void> save_storage(const core::StorageSettings& storage);
 
  private:
-  static constexpr uint8_t kCameraSchema = 3;  // 2: framing appended, 3: live view quality
+  // 2: framing appended, 3: live view quality, 4: sharpness/denoise/white balance mode
+  static constexpr uint8_t kCameraSchema = 4;
   static constexpr uint8_t kStorageSchema = 1;
 };
 

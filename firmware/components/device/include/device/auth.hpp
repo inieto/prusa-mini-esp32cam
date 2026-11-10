@@ -28,6 +28,13 @@ class Auth {
   bool authenticated(std::string_view cookie_header, core::Millis now) const;
   void logout(std::string_view cookie_header);
 
+  // Read-only API token for integrations (ADR-0016): 128 random bits, shown once, only its
+  // SHA-256 is kept in NVS. Generating a new one replaces the old one.
+  core::Result<std::string> generate_api_token();
+  void revoke_api_token();
+  bool has_api_token() const { return api_token_set_; }
+  bool api_token_valid(std::string_view token) const;
+
   static std::string session_cookie(std::string_view token);
   static constexpr std::string_view kClearCookie =
       "sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0";
@@ -47,6 +54,8 @@ class Auth {
   std::array<uint8_t, 16> salt_{};
   std::array<uint8_t, 32> hash_{};
   std::array<Session, 4> sessions_{};
+  bool api_token_set_ = false;
+  std::array<uint8_t, 32> api_hash_{};
   uint8_t failures_ = 0;
   core::Millis locked_until_{0};
 };

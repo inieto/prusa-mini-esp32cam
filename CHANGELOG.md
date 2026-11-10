@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Status LED: the red LED on the back stays off when all is well, blinks slowly without WiFi
+  and double-blinks when PrusaConnect uploads fail. Can be switched off in *System*.
+- Sharpness and noise reduction (OV3660/OV5640) and a fixed white balance preset (all sensors)
+  in *Camera*.
+- Read-only API token (*System*): snapshot, live stream and status for integrations without
+  logging in, via `Authorization: Bearer` or `?token=`; it cannot change anything (ADR-0016).
+
 ### Pending
 - 48 h soak against PrusaConnect on hardware.
 - Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, GPIO12 factory reset, QXGA and

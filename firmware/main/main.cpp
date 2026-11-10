@@ -24,6 +24,7 @@
 #include "device/network.hpp"
 #include "device/printer_monitor.hpp"
 #include "device/settings_store.hpp"
+#include "device/status_led.hpp"
 #include "device/storage.hpp"
 #include "device/web_server.hpp"
 
@@ -187,13 +188,15 @@ extern "C" void app_main() {
 
   static device::LiveStream stream{service};
   stream.start();
+  static device::StatusLed led{service, g_network};
+  led.start(device::StatusLed::load_enabled());
   static CaptureTask capture_task{service, stream};
   xTaskCreatePinnedToCore(service_task, "snapshot", kServiceStack, &capture_task, 5, nullptr, 1);
 
   const core::Result<core::WebBundle> bundle = core::WebBundle::parse(device::embedded_web_bundle());
   if (!bundle) ESP_LOGE(kTag, "embedded web UI is corrupt");
-  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer, mqtt, stream,
-                                g_network, g_system, g_auth, g_clock,
+  static device::WebServer web{{service, camera, g_connect, g_store, g_storage, g_printer, mqtt,
+                                stream, led, g_network, g_system, g_auth, g_clock,
                                 bundle.value_or(core::WebBundle{}), app->version}};
   if (auto r = web.start(); !r) ESP_LOGE(kTag, "HTTP server failed to start");
   if (g_auth.setup_required()) {

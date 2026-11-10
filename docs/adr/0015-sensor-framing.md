@@ -28,5 +28,5 @@ portion" of the image digitally and send that to PrusaConnect.
 ## Consequences
 + Re-centring and zooming without reprinting the case, with no image-quality or CPU cost.
 − The maximum zoom is bounded by sensor resolution ÷ output resolution.
-− Register semantics are sensor-specific: used on the OV3660 (board #2, zoom up to 2.25× tried); the OV2640 path
+− Register semantics are sensor-specific: verified on the OV3660 (board #2: zoom up to 2.25×, pan directions confirmed); the OV2640 path
   follows the driver's own windowing but is not yet verified on hardware.

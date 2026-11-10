@@ -81,6 +81,18 @@ TEST(Framing, PanFollowsWhatTheUserSees) {
   EXPECT_EQ(w.y, 0);
 }
 
+TEST(CameraSettings, ValidatesSensorExtras) {
+  CameraSettings s;
+  s.sharpness = -4;
+  EXPECT_FALSE(validate(s).has_value());
+  s = {};
+  s.denoise = 9;
+  EXPECT_FALSE(validate(s).has_value());
+  s = {};
+  s.wb_mode = 5;
+  EXPECT_FALSE(validate(s).has_value());
+}
+
 TEST(Framing, ValidatesRanges) {
   CameraSettings s;
   s.zoom_pct = 99;

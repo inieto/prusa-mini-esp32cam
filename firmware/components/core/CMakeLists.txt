@@ -16,6 +16,7 @@ set(CORE_SOURCES
     src/settings_json.cpp
     src/storage_policy.cpp
     src/snapshot_service.cpp
+    src/status_led.cpp
     src/web_bundle.cpp
 )
 

@@ -51,6 +51,10 @@ struct CameraSettings {
   // Live view frames are compressed harder than snapshots (same 10..63 scale, higher = smaller):
   // the sensor encodes JPEG in hardware, so this is free and keeps the stream light on WiFi.
   uint8_t live_jpeg_quality = 30;
+  // Schema 4. Zero is the default for all three, so older blobs need no patching.
+  int8_t sharpness = 0;  // -3..3, OV3660/OV5640 only (the OV2640 driver ignores it)
+  uint8_t denoise = 0;   // 0 (off) .. 8, OV3660/OV5640 only
+  uint8_t wb_mode = 0;   // 0 auto, 1 sunny, 2 cloudy, 3 office, 4 home (fixed white balance)
   friend bool operator==(const CameraSettings&, const CameraSettings&) = default;
 };
 

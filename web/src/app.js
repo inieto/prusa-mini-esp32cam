@@ -106,6 +106,11 @@ const FORMS = {
         { key: 'brightness', label: 'Brightness', ...LEVEL },
         { key: 'contrast', label: 'Contrast', ...LEVEL },
         { key: 'saturation', label: 'Saturation', ...LEVEL },
+        { key: 'sharpness', label: 'Sharpness', type: 'range', min: -3, max: 3, step: 1,
+          showIf: (v) => v.supports_sharpness },
+        { key: 'denoise', label: 'Noise reduction', type: 'range', min: 0, max: 8, step: 1,
+          showIf: (v) => v.supports_sharpness, format: (v) => (v === 0 ? 'off' : String(v)),
+          hint: 'Smooths grain in low light at the cost of fine detail' },
       ]],
       ['Exposure and gain', [
         { key: 'auto_exposure', label: 'Auto exposure', type: 'switch' },
@@ -121,6 +126,10 @@ const FORMS = {
         { key: 'manual_gain', label: 'Manual gain', type: 'range', min: 0, max: 30, step: 1,
           showIf: (v) => !v.auto_gain },
         { key: 'auto_white_balance', label: 'Auto white balance', type: 'switch' },
+        { key: 'wb_mode', label: 'White balance preset', type: 'select',
+          options: [[0, 'Auto'], [1, 'Sunny'], [2, 'Cloudy'], [3, 'Office'], [4, 'Home']],
+          showIf: (v) => v.auto_white_balance,
+          hint: 'A fixed preset keeps colours stable under the printer\'s LED lighting' },
         { key: 'lens_correction', label: 'Lens correction', type: 'switch' },
       ]],
       ['Light and flash', [
@@ -507,9 +516,55 @@ function memory(free, total, lowest) {
   return `${kb(free)} free of ${total ? kb(total) : '?'}${pct}${lowest !== undefined ? ` · lowest ${kb(lowest)}` : ''}`;
 }
 
+function statusLedSwitch(enabled) {
+  const input = h('input', { type: 'checkbox', checked: enabled, id: 'f-status-led' });
+  input.addEventListener('change', async () => {
+    try {
+      await api('config/device', { method: 'PUT', body: { status_led: input.checked } });
+    } catch (e) {
+      if (!(e instanceof Unauthorized)) toast(e.message, true);
+      input.checked = !input.checked;
+    }
+  });
+  return h('label', { class: 'switch' }, input, h('span'));
+}
+
+function apiTokenRows(isSet) {
+  const shown = h('div', { class: 'value', style: 'grid-column:2;flex-direction:column;align-items:stretch;gap:.3rem' });
+  const showToken = (token) => {
+    const base = `${location.origin}/api/v1`;
+    const line = (label, text) => h('div', {}, h('b', { text: `${label}: ` }),
+      h('input', { type: 'text', readOnly: true, value: text, style: 'width:100%', onfocus: (e) => e.target.select() }));
+    shown.replaceChildren(
+      h('div', { text: 'Copy it now: it is not shown again.' }),
+      line('Token', token),
+      line('Snapshot URL', `${base}/snapshot.jpg?token=${token}`),
+      line('Stream URL', `${base}/stream?token=${token}`));
+  };
+  return [
+    h('label', { class: 'key', text: 'API token' }),
+    h('div', { class: 'value', style: 'gap:.5rem;flex-wrap:wrap' },
+      h('span', { text: isSet ? 'set (hidden)' : 'none' }),
+      confirmButton(isSet ? 'Generate new' : 'Generate', isSet ? 'Replace it?' : 'Confirm', async () => {
+        try {
+          const r = await api('api-token', { method: 'POST', body: {} });
+          showToken(r.token);
+        } catch (e) {
+          if (!(e instanceof Unauthorized)) toast(e.message, true);
+        }
+      }),
+      isSet ? confirmButton('Revoke', 'Click again to revoke', async () => {
+        await action('api-token/revoke', {}, 'API token revoked');
+        route();
+      }) : null),
+    shown,
+    h('div', { class: 'hint', text: 'Read-only access for integrations (snapshot, live stream, status) without logging in: Bearer header or ?token=. It cannot change settings. Anyone with the URL can watch the camera, so keep it private.' }),
+  ];
+}
+
 async function renderSystem() {
   const view = $('#view');
-  const s = await api('status');
+  const [s, device, apiToken] = await Promise.all([api('status'), api('config/device'), api('api-token')]);
   const fw = s.firmware || {};
   const kv = (label, value) => [h('label', { class: 'key', text: label }), h('div', { class: 'value strong', text: value })];
   const logs = h('pre', { class: 'log', text: 'Loading…' });
@@ -537,6 +592,10 @@ async function renderSystem() {
       coredumpRows(s.coredump)),
     h('h2', { text: 'Maintenance' }),
     h('div', { class: 'form' },
+      h('label', { class: 'key', for: 'f-status-led', text: 'Status LED' }),
+      h('div', { class: 'value' }, statusLedSwitch(device.status_led)),
+      h('div', { class: 'hint', text: 'Red LED on the back: off when all is well, slow blink without WiFi, double blink when uploads fail' }),
+      apiTokenRows(apiToken.set),
       h('label', { class: 'key', text: 'Factory reset' }),
       h('div', { class: 'value' }, confirmButton('Erase settings', 'Click again to erase', async () => {
         await action('factory-reset', {}, 'Settings erased. Rebooting into setup mode…');
