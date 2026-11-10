@@ -28,7 +28,8 @@ state = {
         "ae_level": 0, "manual_exposure": 300, "auto_gain": True, "gain_ceiling": 4,
         "manual_gain": 0, "auto_white_balance": True, "lens_correction": True,
         "flash_on_capture": False, "flash_lead_ms": 200, "flash_duty_pct": 80,
-        "sensor": "OV3660", "max_resolution": "qxga",  # read-only, reported by the device
+        "zoom_pct": 100, "pan_x": 0, "pan_y": 0,
+        "sensor": "OV3660", "max_resolution": "qxga", "max_zoom_pct": 256,  # read-only
     },
     "connect": {"token_set": True, "hostname": "connect.prusa3d.com",
                 "fingerprint": "MjQ4MTc5MTgzMTY4NjkxMzIgMDA6MDA6MDA6MDA6MDA6MDA="},

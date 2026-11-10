@@ -32,7 +32,8 @@ bool visit_fields(CameraSettings& s, Visitor&& v) {
          v.boolean("lens_correction", s.lens_correction) &&
          v.boolean("flash_on_capture", s.flash_on_capture) &&
          v.integer("flash_lead_ms", s.flash_lead_ms) &&
-         v.integer("flash_duty_pct", s.flash_duty_pct);
+         v.integer("flash_duty_pct", s.flash_duty_pct) && v.integer("zoom_pct", s.zoom_pct) &&
+         v.integer("pan_x", s.pan_x) && v.integer("pan_y", s.pan_y);
 }
 
 struct Writer {

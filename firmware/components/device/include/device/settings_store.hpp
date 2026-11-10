@@ -42,7 +42,7 @@ class SettingsStore {
   core::Result<void> save_storage(const core::StorageSettings& storage);
 
  private:
-  static constexpr uint8_t kCameraSchema = 1;
+  static constexpr uint8_t kCameraSchema = 2;  // 2: framing (zoom/pan) appended
   static constexpr uint8_t kStorageSchema = 1;
 };
 

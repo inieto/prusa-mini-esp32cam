@@ -41,7 +41,11 @@ void EspCamera::detect_sensor() {
   sensor_t* sensor = esp_camera_sensor_get();
   if (!sensor) return;
   const camera_sensor_info_t* info = esp_camera_sensor_get_info(&sensor->id);
-  if (info) sensor_name_ = info->name;
+  if (info) {
+    sensor_name_ = info->name;
+    sensor_size_ = {resolution[info->max_size].width, resolution[info->max_size].height};
+  }
+  sensor_pid_ = sensor->id.PID;
   // Larger sensors (OV5640) could go beyond QXGA, but PSRAM cannot hold bigger frames
   // three times over next to the driver's own buffers.
   max_resolution_ = info && info->max_size >= FRAMESIZE_QXGA ? core::Resolution::QXGA
@@ -84,10 +88,59 @@ core::Result<void> EspCamera::init(const core::CameraSettings& settings) {
   if (s.resolution != first) {
     if (auto r = start_driver(s.resolution, s.jpeg_quality); !r) return r;
   }
+  apply_framing(s);
   apply_sensor(s);
   std::lock_guard lock(mutex_);
   current_ = s;
   return {};
+}
+
+uint16_t EspCamera::max_zoom_pct(core::Resolution r) const {
+  if (sensor_pid_ != OV3660_PID && sensor_pid_ != OV2640_PID) return 100;
+  return core::max_zoom_pct(sensor_size_, core::size_of(r));
+}
+
+// Digital zoom through the sensor's own windowing (ADR-0015): it reads only the chosen region of
+// the pixel array and scales it to the output size, so a zoomed frame costs nothing extra and
+// keeps real detail. Register meanings differ per sensor; values mirror what esp32-camera
+// programs for the standard frame sizes.
+void EspCamera::apply_framing(const core::CameraSettings& s) {
+  sensor_t* sensor = esp_camera_sensor_get();
+  if (!sensor) return;
+  const core::Size out = core::size_of(s.resolution);
+  core::CameraSettings framing = s;
+  framing.zoom_pct = std::min(s.zoom_pct, max_zoom_pct(s.resolution));
+  const core::SensorWindow w = core::framing_window(sensor_size_, out, framing);
+  if (applied_window_ && *applied_window_ == w && applied_resolution_ == s.resolution) return;
+
+  const bool unzoomed = framing.zoom_pct <= 100;
+  int err = 0;
+  if (unzoomed) {
+    // The driver's own setting for this frame size (also undoes a previous zoom).
+    if (applied_window_) err = sensor->set_framesize(sensor, to_framesize(s.resolution));
+  } else if (sensor_pid_ == OV3660_PID) {
+    // Array is 2048x1536 plus a 32x12 border: full frame is x 0..2079, y 0..1547.
+    const bool binning = out.width <= w.width / 2 && out.height <= w.height / 2;
+    const bool scale = !((out.width == w.width && out.height == w.height) ||
+                         (out.width == w.width / 2 && out.height == w.height / 2));
+    err = sensor->set_res_raw(sensor, w.x, w.y, w.x + w.width + 31, w.y + w.height + 11,
+                              binning ? 8 : 16, binning ? 2 : 6, 2300, binning ? 1564 / 2 + 1 : 1564,
+                              out.width, out.height, scale, binning);
+  } else if (sensor_pid_ == OV2640_PID) {
+    // Full-resolution (UXGA, mode 0) readout; the DSP crops the window and scales it.
+    err = sensor->set_res_raw(sensor, 0, 0, 0, 0, w.x, w.y, w.width, w.height, out.width,
+                              out.height, false, false);
+  }
+  if (err) {
+    ESP_LOGW(kTag, "framing rejected by the sensor (%d)", err);
+    return;
+  }
+  applied_window_ = w;
+  applied_resolution_ = s.resolution;
+  if (!unzoomed) {
+    ESP_LOGI(kTag, "framing: zoom %u%%, sensor window %ux%u at %u,%u", framing.zoom_pct, w.width,
+             w.height, w.x, w.y);
+  }
 }
 
 core::Result<void> EspCamera::start_driver(core::Resolution resolution, uint8_t quality) {
@@ -132,6 +185,7 @@ core::Result<void> EspCamera::start_driver(core::Resolution resolution, uint8_t 
     return core::fail(core::Errc::Io, err);
   }
   driver_started_ = true;
+  applied_window_.reset();  // a fresh driver frames the whole sensor again
   return {};
 }
 
@@ -168,6 +222,7 @@ core::Result<void> EspCamera::apply(const core::CameraSettings& settings) {
     // The driver sizes its buffers at init, so a resolution change needs a restart.
     if (auto r = start_driver(settings.resolution, settings.jpeg_quality); !r) return r;
   }
+  apply_framing(settings);
   apply_sensor(settings);
   std::lock_guard lock(mutex_);
   current_ = settings;

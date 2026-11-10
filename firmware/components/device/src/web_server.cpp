@@ -461,6 +461,7 @@ esp_err_t WebServer::camera_config(httpd_req_t* req, bool update) {
   cJSON_AddStringToObject(j.get(), "sensor", d_.camera.sensor_name().c_str());
   cJSON_AddStringToObject(j.get(), "max_resolution",
                           std::string(core::resolution_name(d_.camera.max_resolution())).c_str());
+  cJSON_AddNumberToObject(j.get(), "max_zoom_pct", d_.camera.max_zoom_pct(settings.resolution));
   return send_json(req, "200 OK", print(j.get()));
 }
 

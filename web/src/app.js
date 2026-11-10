@@ -91,6 +91,15 @@ const FORMS = {
         { key: 'hmirror', label: 'Horizontal mirror', type: 'switch' },
         { key: 'vflip', label: 'Vertical flip', type: 'switch' },
       ]],
+      ['Framing', [
+        { key: 'zoom_pct', label: 'Zoom', type: 'range', min: 100, max: (v) => v.max_zoom_pct || 100, step: 5,
+          live: true, format: (v) => `${(v / 100).toFixed(2)}×`,
+          hint: 'Done by the sensor: zoomed frames keep full detail. The maximum depends on the resolution. Open the live view to frame while you adjust.' },
+        { key: 'pan_x', label: 'Horizontal position', type: 'range', min: -100, max: 100, step: 5, live: true,
+          showIf: (v) => v.zoom_pct > 100, format: (v) => (v === 0 ? 'center' : v < 0 ? `${-v} % left` : `${v} % right`) },
+        { key: 'pan_y', label: 'Vertical position', type: 'range', min: -100, max: 100, step: 5, live: true,
+          showIf: (v) => v.zoom_pct > 100, format: (v) => (v === 0 ? 'center' : v < 0 ? `${-v} % up` : `${v} % down`) },
+      ]],
       ['Adjustments', [
         { key: 'brightness', label: 'Brightness', ...LEVEL },
         { key: 'contrast', label: 'Contrast', ...LEVEL },
@@ -203,17 +212,19 @@ function fieldControl(field, values, onChange) {
       return h('label', { class: 'switch' }, input, h('span'));
     }
     case 'range': {
-      const toUi = (v) => (field.invert ? field.max + field.min - v : v);
-      const input = h('input', { type: 'range', min: field.min, max: field.max, step: field.step,
-                                 value: toUi(value), id: `f-${field.key}` });
+      const max = typeof field.max === 'function' ? field.max(values) : field.max;
+      const toUi = (v) => (field.invert ? max + field.min - v : v);
+      const input = h('input', { type: 'range', min: field.min, max, step: field.step,
+                                 value: toUi(Math.min(value, max)), id: `f-${field.key}`, disabled: max <= field.min });
       const shown = h('span', { class: 'range-value' });
       const paint = () => {
-        const pct = ((input.value - field.min) / (field.max - field.min)) * 100;
+        const pct = max > field.min ? ((input.value - field.min) / (max - field.min)) * 100 : 0;
         input.style.setProperty('--fill', `${pct}%`);
         // Inverted scales (JPEG quality) read better as a percentage than as raw driver values.
         shown.textContent = field.invert
           ? `${Math.round(pct)} %`
-          : `${input.value}${field.unit ? ` ${field.unit}` : ''}`;
+          : field.format ? field.format(Number(input.value))
+            : `${input.value}${field.unit ? ` ${field.unit}` : ''}`;
       };
       input.addEventListener('input', paint);
       input.addEventListener('change', () => onChange(toUi(Number(input.value))));
@@ -268,7 +279,19 @@ async function renderForm(name) {
         if (field.showIf && !field.showIf(merged)) continue;
         form.append(
           h('label', { class: 'key', for: `f-${field.key}`, text: field.label }),
-          h('div', { class: 'value' }, fieldControl(field, merged, (v) => {
+          h('div', { class: 'value' }, fieldControl(field, merged, async (v) => {
+            if (field.live) {
+              // Framing applies at once (the camera picks it up before the next frame), so it can
+              // be tuned while watching the live view; no Save needed.
+              try {
+                Object.assign(values, await api(spec.endpoint, { method: 'PUT', body: { [field.key]: v } }));
+                if (!liveOn) setTimeout(() => $('#refresh').click(), 300);
+              } catch (e) {
+                if (!(e instanceof Unauthorized)) toast(`Could not apply: ${e.message}`, true);
+              }
+              if (fields.some((f) => f.showIf)) draw();
+              return;
+            }
             changes[field.key] = v;
             if (fields.some((f) => f.showIf)) draw();
             save.disabled = false;

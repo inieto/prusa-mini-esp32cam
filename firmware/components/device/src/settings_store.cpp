@@ -36,6 +36,12 @@ class Nvs {
     size_t len = size;
     return ok_ && nvs_get_blob(handle_, key, out, &len) == ESP_OK && len == size;
   }
+  // Reads a blob of at most `size` bytes; returns its length (0 if absent or larger).
+  size_t blob_prefix(const char* key, void* out, size_t size) const {
+    size_t len = 0;
+    if (!ok_ || nvs_get_blob(handle_, key, nullptr, &len) != ESP_OK || len > size) return 0;
+    return nvs_get_blob(handle_, key, out, &len) == ESP_OK ? len : 0;
+  }
   esp_err_t set_blob(const char* key, const void* data, size_t size) {
     return ok_ ? nvs_set_blob(handle_, key, data, size) : ESP_ERR_NVS_NOT_INITIALIZED;
   }
@@ -111,11 +117,21 @@ core::Result<void> SettingsStore::save_connect(const ConnectCredentials& c) {
 core::CameraSettings SettingsStore::load_camera() const {
   Nvs nvs("camera", NVS_READONLY);
   CameraBlob blob{};
-  if (nvs.blob("settings", &blob, sizeof blob) && blob.schema == kCameraSchema &&
-      core::validate(blob.settings)) {
-    return blob.settings;
+  const size_t len = nvs.blob_prefix("settings", &blob, sizeof blob);
+  if (len == 0) return {};
+  if (blob.schema == 1) {
+    // Schema 1 predates framing; the fields were appended, so its bytes are a prefix. Whatever
+    // lies beyond it was zero-filled above: give the new fields their defaults.
+    const core::CameraSettings defaults;
+    if (blob.settings.zoom_pct == 0) {
+      blob.settings.zoom_pct = defaults.zoom_pct;
+      blob.settings.pan_x = defaults.pan_x;
+      blob.settings.pan_y = defaults.pan_y;
+    }
+  } else if (blob.schema != kCameraSchema || len != sizeof blob) {
+    return {};
   }
-  return {};
+  return core::validate(blob.settings) ? blob.settings : core::CameraSettings{};
 }
 
 core::Result<void> SettingsStore::save_camera(const core::CameraSettings& camera) {

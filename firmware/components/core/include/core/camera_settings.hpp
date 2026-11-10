@@ -43,8 +43,28 @@ struct CameraSettings {
   bool flash_on_capture = false;
   uint16_t flash_lead_ms = 200;  // 0..2000: light up before exposure
   uint8_t flash_duty_pct = 80;   // 0..100 (LED is overdriven at 100 %)
+  // Framing (ADR-0015): digital zoom done by the sensor's windowing, so zoomed frames keep full
+  // detail instead of enlarging pixels. Appended last: older NVS blobs default these.
+  uint16_t zoom_pct = 100;  // 100..400; clamped to what the sensor can deliver without upscaling
+  int8_t pan_x = 0;         // -100 (left) .. 100 (right), in percent of the free travel
+  int8_t pan_y = 0;         // -100 (up) .. 100 (down), as seen in the final (rotated) image
   friend bool operator==(const CameraSettings&, const CameraSettings&) = default;
 };
+
+// Region of the sensor array that becomes the output frame.
+struct SensorWindow {
+  uint16_t x, y, width, height;
+  friend bool operator==(SensorWindow, SensorWindow) = default;
+};
+
+// Largest zoom (in %) that still reads at least one sensor pixel per output pixel.
+uint16_t max_zoom_pct(Size sensor, Size output);
+
+// Window for a zoom and pan, keeping the output's aspect ratio. Pan is given as the user sees
+// the final image; mirror/flip (done by the sensor) and EXIF rotation (done by the viewer) are
+// undone so "right" always moves the view right. Coordinates are multiples of `align`.
+SensorWindow framing_window(Size sensor, Size output, const CameraSettings& settings,
+                            uint16_t align = 8);
 
 // JPEG buffer we ask the camera driver for. Its default (width*height/5) overflows with the
 // OV3660 at good quality ("FB-OVF", frame dropped): 1/3 byte per pixel up to UXGA, 1/4 at QXGA

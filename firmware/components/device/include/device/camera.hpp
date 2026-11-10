@@ -24,6 +24,8 @@ class EspCamera final : public core::CameraPort {
   // Valid after init(): "OV2640", "OV3660", ... and the largest resolution we offer for it.
   const std::string& sensor_name() const { return sensor_name_; }
   core::Resolution max_resolution() const { return max_resolution_; }
+  // Largest digital zoom (%) at a resolution; 100 when the sensor has no supported windowing.
+  uint16_t max_zoom_pct(core::Resolution r) const;
   bool supports(core::Resolution r) const { return r <= max_resolution_; }
 
   core::Result<core::FrameRef> capture(core::CaptureKind kind = core::CaptureKind::Snapshot) override;
@@ -42,6 +44,7 @@ class EspCamera final : public core::CameraPort {
   void set_led_duty(uint8_t percent);
 
   void detect_sensor();
+  void apply_framing(const core::CameraSettings& settings);
 
   core::FramePool* pool_ = nullptr;
   const core::WallClock& wall_;
@@ -56,6 +59,11 @@ class EspCamera final : public core::CameraPort {
   uint32_t sequence_ = 0;
   std::string sensor_name_ = "unknown";
   core::Resolution max_resolution_ = core::Resolution::UXGA;
+  uint16_t sensor_pid_ = 0;
+  core::Size sensor_size_{1600, 1200};
+  // What the sensor currently frames; reset whenever the driver restarts (it reprograms it).
+  std::optional<core::SensorWindow> applied_window_;
+  core::Resolution applied_resolution_ = core::Resolution::SVGA;
 };
 
 }  // namespace device
