@@ -16,7 +16,8 @@ namespace {
 constexpr const char* kTag = "camera";
 constexpr ledc_timer_t kLedTimer = LEDC_TIMER_1;      // TIMER_0/CHANNEL_0 drive XCLK
 constexpr ledc_channel_t kLedChannel = LEDC_CHANNEL_1;
-constexpr uint32_t kLedMaxDuty = (1u << 8) - 1;
+// 10-bit PWM at 5 kHz: fine steps at the low end of the 1..100 % intensity slider.
+constexpr uint32_t kLedMaxDuty = (1u << 10) - 1;
 
 framesize_t to_framesize(core::Resolution r) {
   switch (r) {
@@ -58,7 +59,7 @@ void EspCamera::detect_sensor() {
 core::Result<void> EspCamera::init(const core::CameraSettings& settings) {
   const ledc_timer_config_t timer = {
       .speed_mode = LEDC_LOW_SPEED_MODE,
-      .duty_resolution = LEDC_TIMER_8_BIT,
+      .duty_resolution = LEDC_TIMER_10_BIT,
       .timer_num = kLedTimer,
       .freq_hz = 5000,
       .clk_cfg = LEDC_AUTO_CLK,
@@ -241,16 +242,15 @@ void EspCamera::request_settings(const core::CameraSettings& settings) {
 }
 
 void EspCamera::set_led_duty(uint8_t percent) {
-  ledc_set_duty(LEDC_LOW_SPEED_MODE, kLedChannel, kLedMaxDuty * percent / 100);
+  // Round up so 1 % always lights the LED a little.
+  const uint32_t duty = percent == 0 ? 0 : std::max<uint32_t>(1, (kLedMaxDuty * percent + 99) / 100);
+  ledc_set_duty(LEDC_LOW_SPEED_MODE, kLedChannel, duty);
   ledc_update_duty(LEDC_LOW_SPEED_MODE, kLedChannel);
 }
 
 void EspCamera::set_light(bool on) {
-  uint8_t duty;
-  {
-    std::lock_guard lock(mutex_);
-    duty = current_.flash_duty_pct;
-  }
+  // Pending settings count: a new intensity applies before the capture task picks it up.
+  const uint8_t duty = settings().flash_duty_pct;
   light_on_ = on;
   set_led_duty(on ? duty : 0);
 }

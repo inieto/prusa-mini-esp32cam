@@ -19,3 +19,4 @@ it. Template: [`0000-template.md`](0000-template.md).
 | [0012](0012-prusalink.md) | Read the printer state from PrusaLink | accepted |
 | [0013](0013-mqtt-home-assistant.md) | MQTT bridge with Home Assistant discovery, plain MQTT only | accepted |
 | [0014](0014-mjpeg-live-stream.md) | MJPEG live view through an async HTTP handler, one viewer | accepted |
+| [0015](0015-sensor-framing.md) | Digital zoom and pan through the sensor's windowing | accepted |

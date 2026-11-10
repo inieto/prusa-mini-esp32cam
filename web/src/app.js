@@ -123,12 +123,13 @@ const FORMS = {
         { key: 'auto_white_balance', label: 'Auto white balance', type: 'switch' },
         { key: 'lens_correction', label: 'Lens correction', type: 'switch' },
       ]],
-      ['Flash', [
+      ['Light and flash', [
+        { key: 'flash_duty_pct', label: 'Light intensity', type: 'range', min: 1, max: 100, step: 1,
+          unit: '%', live: true,
+          hint: 'For the Light button and the flash on capture. Applies at once (turn the light on to see it).' },
         { key: 'flash_on_capture', label: 'Flash on capture', type: 'switch' },
         { key: 'flash_lead_ms', label: 'Lead time', type: 'range', min: 0, max: 2000, step: 50,
           unit: 'ms', showIf: (v) => v.flash_on_capture },
-        { key: 'flash_duty_pct', label: 'Intensity', type: 'range', min: 5, max: 100, step: 5,
-          unit: '%', showIf: (v) => v.flash_on_capture },
       ]],
     ],
   },
@@ -499,6 +500,13 @@ function coredumpRows(dump) {
   ];
 }
 
+// "99 KB free of 290 KB (34 % free) · lowest 70 KB"
+function memory(free, total, lowest) {
+  const kb = (n) => `${Math.round(n / 1024)} KB`;
+  const pct = total ? ` (${Math.round((100 * free) / total)} % free)` : '';
+  return `${kb(free)} free of ${total ? kb(total) : '?'}${pct}${lowest !== undefined ? ` · lowest ${kb(lowest)}` : ''}`;
+}
+
 async function renderSystem() {
   const view = $('#view');
   const s = await api('status');
@@ -510,8 +518,8 @@ async function renderSystem() {
     h('div', { class: 'form' },
       kv('Firmware', s.version),
       kv('Uptime', duration(s.uptime_s)),
-      kv('Free internal RAM', `${Math.round(s.heap.internal_free / 1024)} KB (minimum ${Math.round(s.heap.internal_min / 1024)} KB)`),
-      kv('Free PSRAM', `${Math.round(s.heap.psram_free / 1024)} KB`),
+      kv('Internal RAM', memory(s.heap.internal_free, s.heap.internal_total, s.heap.internal_min)),
+      kv('PSRAM', memory(s.heap.psram_free, s.heap.psram_total)),
       kv('WiFi', `${s.wifi.ssid} · ${s.wifi.ip} · ${s.wifi.rssi} dBm`),
       kv('Uploads OK / failed', `${s.connect.uploads_ok} / ${s.connect.uploads_failed}`),
       kv('Last error', s.connect.last_error || '—')),

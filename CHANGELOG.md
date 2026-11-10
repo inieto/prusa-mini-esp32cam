@@ -6,7 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Pending
+- 48 h soak against PrusaConnect on hardware.
+- Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, GPIO12 factory reset, QXGA and
+  OV2640 framing.
+
+## [1.0.0] - 2026-11-10
+
 ### Added
+- Light intensity slider (1–100 %, *Camera → Light and flash*) for the Light button and the flash
+  on capture, applied at once; the LED PWM went from 8 to 10 bits for fine low-end steps.
+- *System* shows total internal RAM and PSRAM with the free percentage.
 - Framing: digital zoom (up to the sensor's limit, e.g. 2.56× at 800×600 with the OV3660) and
   pan, done by the sensor's windowing so zoomed frames keep real detail and cost nothing extra.
   Adjusted live from *Camera → Framing* while watching the live view (ADR-0015).
@@ -18,11 +28,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ### Fixed
 - An upload on a keep-alive connection the server had already closed counted as a failure and
   waited 11–45 s; it is now retried at once on a fresh connection. Seen on hardware.
-
-### Pending
-- 48 h soak against PrusaConnect on hardware.
-- Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, live view, GPIO12 factory reset
-  and QXGA (built and host-tested in 0.2.0).
+- The live view saturated the camera's WiFi (frames sent back to back), stalling Refresh, Light
+  and page loads: it now paces itself to at most half the link and 4 fps, captures frames on
+  demand, and TCP buffers doubled. Seen on hardware.
 
 ## [0.2.0] - 2026-11-10
 
@@ -109,5 +117,6 @@ PrusaConnect uploads, SD mount verified on hardware).
 - The v1.1.2 *fingerprint* is reproduced: with the same token, PrusaConnect keeps recognising the
   migrated camera.
 
-[Unreleased]: https://github.com/inieto/prusa-mini-esp32cam/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/inieto/prusa-mini-esp32cam/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/inieto/prusa-mini-esp32cam/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/inieto/prusa-mini-esp32cam/releases/tag/v0.2.0

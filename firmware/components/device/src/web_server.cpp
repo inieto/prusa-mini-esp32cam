@@ -397,7 +397,9 @@ esp_err_t WebServer::get_status(httpd_req_t* req) {
   cJSON* h = cJSON_AddObjectToObject(root.get(), "heap");
   cJSON_AddNumberToObject(h, "internal_free", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
   cJSON_AddNumberToObject(h, "internal_min", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+  cJSON_AddNumberToObject(h, "internal_total", heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
   cJSON_AddNumberToObject(h, "psram_free", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  cJSON_AddNumberToObject(h, "psram_total", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
 
   const FirmwareStatus fw = firmware_status();
   cJSON* f = cJSON_AddObjectToObject(root.get(), "firmware");
@@ -454,6 +456,7 @@ esp_err_t WebServer::camera_config(httpd_req_t* req, bool update) {
       return send_error(req, "500 Internal Server Error", "could not save");
     }
     d_.camera.request_settings(settings);  // applied by the capture task before its next frame
+    if (d_.camera.light()) d_.camera.set_light(true);  // new intensity shows at once
   }
   // Read-only facts about the sensor ride along so the UI can offer only valid resolutions.
   const std::string json = core::camera_settings_to_json(settings);
