@@ -175,9 +175,13 @@ void Network::log_disconnect(const wifi_event_sta_disconnected_t& ev) {
   ++failures_;
   // First failure, then every 10th: enough to diagnose without flooding the log.
   if (failures_ != 1 && failures_ % 10 != 0) return;
-  ESP_LOGW(kTag, "cannot join '%.*s': %s (reason %u), RSSI %d dBm%s, attempt %lu",
-           ev.ssid_len, reinterpret_cast<const char*>(ev.ssid), reason_name(ev.reason),
-           ev.reason, ev.rssi, ev.rssi != 0 && ev.rssi < kWeakRssi ? " (weak)" : "",
+  // The driver reports -128 when it heard nothing at all (e.g. "network not found").
+  char signal[24] = "no signal";
+  if (ev.rssi > -128 && ev.rssi != 0) {
+    std::snprintf(signal, sizeof signal, "RSSI %d dBm%s", ev.rssi, ev.rssi < kWeakRssi ? " (weak)" : "");
+  }
+  ESP_LOGW(kTag, "cannot join '%.*s': %s (reason %u), %s, attempt %lu", ev.ssid_len,
+           reinterpret_cast<const char*>(ev.ssid), reason_name(ev.reason), ev.reason, signal,
            static_cast<unsigned long>(failures_));
 }
 

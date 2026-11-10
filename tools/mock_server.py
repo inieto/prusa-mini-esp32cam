@@ -168,6 +168,9 @@ class Handler(SimpleHTTPRequestHandler):
                 {"ssid": "nietogiardinieri", "rssi": -48, "channel": 6, "auth": "WPA2"},
                 {"ssid": "<script>alert(1)</script>", "rssi": -80, "channel": 11, "auth": "WPA2"},
             ])
+        if path == "preview" and method == "POST":
+            state["seq"] += 1  # a fresh local frame, nothing uploaded
+            return self.send_json({"ok": True}, HTTPStatus.ACCEPTED)
         if path == "snapshot" and method == "POST":
             state["seq"] += 1
             state["uploads_ok"] += 1

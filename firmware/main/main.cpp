@@ -100,7 +100,8 @@ void service_task(void* arg) {
     if (now - last_tick >= core::Millis{1000}) {
       last_tick = now;
       ctx.service.tick();
-    } else if (ctx.stream.watching() && now - last_preview >= kPreviewPeriod) {
+    } else if (ctx.service.consume_preview_request() ||
+               (ctx.stream.watching() && now - last_preview >= kPreviewPeriod)) {
       last_preview = now;
       ctx.service.capture_preview();
     }

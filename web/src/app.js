@@ -643,7 +643,17 @@ $('#snap-now').addEventListener('click', async (ev) => {
   setTimeout(() => { ev.target.disabled = false; refreshStatus(); }, 2500);
 });
 $('#light-toggle').addEventListener('click', async () => { await action('light', { on: !lightOn }); refreshStatus(); });
-$('#refresh').addEventListener('click', () => { refreshStatus(); route(); });
+// Refresh takes a fresh local frame (not uploaded) and shows it as soon as it exists.
+$('#refresh').addEventListener('click', async () => {
+  const before = $('#photo').dataset.seq;
+  await action('preview', {});
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 300));
+    await refreshStatus();
+    if ($('#photo').dataset.seq !== before) break;
+  }
+  route();
+});
 $('#reboot').addEventListener('click', () => {
   const b = $('#reboot');
   if (b.dataset.armed) {

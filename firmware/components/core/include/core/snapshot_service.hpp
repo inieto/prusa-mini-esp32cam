@@ -87,6 +87,9 @@ class SnapshotService {
   // Thread-safe requests.
   void request_snapshot() { snapshot_requested_ = true; }
   void request_info_sync() { info_requested_ = true; }
+  // A fresh local frame for the web UI (no upload): served by the owning task within ~100 ms.
+  void request_preview() { preview_requested_ = true; }
+  bool consume_preview_request() { return preview_requested_.exchange(false); }
   FrameRef latest_frame() const;
   ServiceStatus status() const;
 
@@ -113,6 +116,7 @@ class SnapshotService {
   std::atomic<bool> only_while_printing_{false};
   std::atomic<bool> snapshot_requested_{false};
   std::atomic<bool> info_requested_{false};
+  std::atomic<bool> preview_requested_{false};
 
   mutable std::mutex mutex_;  // guards status_ and latest_
   ServiceStatus status_;

@@ -73,6 +73,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Code, docs, ADRs, web UI and changelog are now in English.
 
 ### Fixed
+- *Refresh* now takes a fresh local frame (not uploaded) and shows it within a second; before
+  it only re-read the last scheduled capture, up to one interval old.
 - OV3660 frames overflowed the camera driver's default JPEG buffer (`FB-OVF`, frames dropped):
   the buffer is now sized explicitly per resolution. Seen on hardware.
 - The web UI was shown as raw HTML: the `Content-Type` of the UI files pointed to memory that

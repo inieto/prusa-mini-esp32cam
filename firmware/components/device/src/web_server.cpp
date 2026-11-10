@@ -281,6 +281,10 @@ esp_err_t WebServer::handle_api(httpd_req_t* req, std::string_view route) {
       d_.service.request_snapshot();
       return send_json(req, "202 Accepted", R"({"ok":true})");
     }
+    if (route == "preview") {
+      d_.service.request_preview();
+      return send_json(req, "202 Accepted", R"({"ok":true})");
+    }
     if (route == "light") {
       JsonPtr j(cJSON_ParseWithLength(body->data(), body->size()));
       d_.camera.set_light(j && cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(j.get(), "on")));
