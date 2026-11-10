@@ -33,7 +33,7 @@ constexpr const char* kTag = "main";
 // One slot is always the latest frame; the others cover an upload, the live stream and the
 // timelapse/MQTT hand-overs. QXGA frames only fit three times next to the driver's buffers.
 constexpr size_t kMaxFrameSlots = 4;
-constexpr core::Millis kPreviewPeriod{200};  // live view: 5 fps at most
+constexpr core::Millis kPreviewPeriod{200};  // live view: frames on demand, never faster than this
 constexpr uint32_t kServiceStack = 10 * 1024;  // TLS handshake runs on this task
 constexpr core::Millis kHealthyAfter{60'000};    // confirm OTA image after this uptime
 
@@ -101,7 +101,7 @@ void service_task(void* arg) {
       last_tick = now;
       ctx.service.tick();
     } else if (ctx.service.consume_preview_request() ||
-               (ctx.stream.watching() && now - last_preview >= kPreviewPeriod)) {
+               (ctx.stream.wants_frame() && now - last_preview >= kPreviewPeriod)) {
       last_preview = now;
       ctx.service.capture_preview();
     }

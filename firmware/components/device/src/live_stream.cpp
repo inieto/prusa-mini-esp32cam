@@ -3,6 +3,7 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 
+#include <algorithm>
 #include <cstdio>
 
 namespace device {
@@ -11,7 +12,8 @@ namespace {
 constexpr const char* kTag = "stream";
 constexpr uint32_t kStack = 4096;
 constexpr int64_t kMaxStreamUs = 30LL * 60 * 1'000'000;  // a forgotten tab stops after 30 min
-constexpr TickType_t kPoll = pdMS_TO_TICKS(40);
+constexpr TickType_t kPoll = pdMS_TO_TICKS(20);
+constexpr int64_t kMinFramePeriodUs = 250'000;  // at most 4 fps
 constexpr char kBoundary[] = "prusacamframe";
 
 }  // namespace
@@ -58,14 +60,17 @@ void LiveStream::stream(httpd_req_t* req) {
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
   httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
   const int64_t started = esp_timer_get_time();
-  uint32_t last_seq = 0;
+  uint32_t last_seq = service_.latest_frame() ? service_.latest_frame().info().sequence : 0;
+  wants_frame_ = true;
   while (esp_timer_get_time() - started < kMaxStreamUs) {
     const core::FrameRef frame = service_.latest_frame();
     if (!frame || frame.info().sequence == last_seq) {
       vTaskDelay(kPoll);
       continue;
     }
+    wants_frame_ = false;
     last_seq = frame.info().sequence;
+    const int64_t send_started = esp_timer_get_time();
     const auto bytes = frame.bytes();
     char part[96];
     const int n = std::snprintf(part, sizeof part,
@@ -76,9 +81,17 @@ void LiveStream::stream(httpd_req_t* req) {
         httpd_resp_send_chunk(req, reinterpret_cast<const char*>(bytes.data()),
                               static_cast<ssize_t>(bytes.size())) != ESP_OK ||
         httpd_resp_send_chunk(req, "\r\n", 2) != ESP_OK) {
+      wants_frame_ = false;
       return;  // viewer went away
     }
+    // Pace: idle at least as long as the frame took to send, so the stream never takes more than
+    // half of the link and the UI, uploads and buttons stay responsive.
+    const int64_t took = esp_timer_get_time() - send_started;
+    const int64_t pause = std::max(took, kMinFramePeriodUs - took);
+    vTaskDelay(pdMS_TO_TICKS(pause / 1000));
+    wants_frame_ = true;
   }
+  wants_frame_ = false;
   httpd_resp_send_chunk(req, nullptr, 0);
 }
 

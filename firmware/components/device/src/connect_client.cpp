@@ -57,6 +57,22 @@ core::Result<std::string> PrusaConnectClient::put_info(std::string_view json) {
 core::Result<std::string> PrusaConnectClient::put(std::string_view path,
                                                   std::string_view content_type,
                                                   std::span<const uint8_t> body) {
+  // The server drops idle keep-alive connections; we only learn it when the reused socket fails
+  // to write (seen on board #2: "connection abort" after a quiet minute). That is not a network
+  // failure: retry once on a fresh connection before reporting it (and backing off).
+  const bool reused = client_ && connected_host_ == credentials().host;
+  core::Result<std::string> result = put_once(path, content_type, body);
+  if (!result && reused &&
+      (result.error().code == core::Errc::Transport || result.error().code == core::Errc::Timeout)) {
+    ESP_LOGI(kTag, "kept-alive connection was closed by the server, reconnecting");
+    result = put_once(path, content_type, body);
+  }
+  return result;
+}
+
+core::Result<std::string> PrusaConnectClient::put_once(std::string_view path,
+                                                       std::string_view content_type,
+                                                       std::span<const uint8_t> body) {
   const ConnectCredentials creds = credentials();
   const std::string url = "https://" + creds.host + std::string(path);
 

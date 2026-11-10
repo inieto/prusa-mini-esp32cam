@@ -20,8 +20,10 @@ class LiveStream {
   void start();
   // From the (authenticated) HTTP handler. Returns once the stream task owns the request.
   esp_err_t serve(httpd_req_t* req);
-  // Read by the capture task to decide whether to take preview frames.
   bool watching() const { return active_; }
+  // Read by the capture task: the stream is ready for its next frame. Frames are captured on
+  // demand, so the rate follows what the link can carry instead of a fixed 5 fps.
+  bool wants_frame() const { return active_ && wants_frame_; }
 
  private:
   static void task_entry(void* self);
@@ -31,6 +33,7 @@ class LiveStream {
   core::SnapshotService& service_;
   TaskHandle_t task_ = nullptr;
   std::atomic<bool> active_{false};
+  std::atomic<bool> wants_frame_{false};
   std::atomic<httpd_req_t*> request_{nullptr};
 };
 

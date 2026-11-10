@@ -33,6 +33,8 @@ class PrusaConnectClient final : public core::ConnectApi {
  private:
   core::Result<std::string> put(std::string_view path, std::string_view content_type,
                                 std::span<const uint8_t> body);
+  core::Result<std::string> put_once(std::string_view path, std::string_view content_type,
+                                     std::span<const uint8_t> body);
   void reset_connection();
 
   mutable std::mutex mutex_;

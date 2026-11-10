@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Framing: digital zoom (up to the sensor's limit, e.g. 2.56× at 800×600 with the OV3660) and
+  pan, done by the sensor's windowing so zoomed frames keep real detail and cost nothing extra.
+  Adjusted live from *Camera → Framing* while watching the live view (ADR-0015).
+
+### Fixed
+- An upload on a keep-alive connection the server had already closed counted as a failure and
+  waited 11–45 s; it is now retried at once on a fresh connection. Seen on hardware.
+
 ### Pending
 - 48 h soak against PrusaConnect on hardware.
 - Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, live view, GPIO12 factory reset
