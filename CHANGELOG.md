@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Pending
+- 48 h soak against PrusaConnect on hardware.
+- Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, live view, GPIO12 factory reset
+  and QXGA (built and host-tested in 0.2.0).
+
+## [0.2.0] - 2026-11-10
+
+First tagged release. Runs on an AI Thinker board with OV3660 (web UI, login, WiFi, fallback AP,
+PrusaConnect uploads, SD mount verified on hardware).
+
 ### Added
 - On-device web server with the embedded UI (gzip, ~22 KB, served with an ETag).
 - Login without a factory password: the first user is created from the web UI during the first
@@ -86,5 +96,5 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - The v1.1.2 *fingerprint* is reproduced: with the same token, PrusaConnect keeps recognising the
   migrated camera.
 
-### Pending
-- 48 h soak against PrusaConnect on hardware.
+[Unreleased]: https://github.com/inieto/prusa-mini-esp32cam/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/inieto/prusa-mini-esp32cam/releases/tag/v0.2.0
