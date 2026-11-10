@@ -106,6 +106,7 @@ core::Result<void> Network::start(const WifiCredentials& wifi, const std::string
 
   if ((err = esp_wifi_start()) != ESP_OK) return core::fail(core::Errc::Io, err);
   esp_wifi_set_ps(WIFI_PS_NONE);  // latency and stability over power: we are mains powered
+  set_tx_power(wifi.tx_power_dbm);
   start_services(wifi.hostname);
   return {};
 }
@@ -169,6 +170,15 @@ int Network::ap_client_count() const {
   if (!ap_active_) return 0;
   wifi_sta_list_t list{};
   return esp_wifi_ap_get_sta_list(&list) == ESP_OK ? list.num : 0;
+}
+
+void Network::set_tx_power(uint8_t dbm) {
+  // The driver takes quarter-dBm units and rounds to the nearest supported step.
+  const esp_err_t err = esp_wifi_set_max_tx_power(static_cast<int8_t>(dbm * 4));
+  int8_t applied = 0;
+  esp_wifi_get_max_tx_power(&applied);
+  ESP_LOGI(kTag, "max TX power %u dBm requested, %.1f dBm applied%s", dbm, applied / 4.0,
+           err == ESP_OK ? "" : " (rejected)");
 }
 
 void Network::log_disconnect(const wifi_event_sta_disconnected_t& ev) {

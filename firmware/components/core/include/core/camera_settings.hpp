@@ -48,6 +48,9 @@ struct CameraSettings {
   uint16_t zoom_pct = 100;  // 100..400; clamped to what the sensor can deliver without upscaling
   int8_t pan_x = 0;         // -100 (left) .. 100 (right), in percent of the free travel
   int8_t pan_y = 0;         // -100 (up) .. 100 (down), as seen in the final (rotated) image
+  // Live view frames are compressed harder than snapshots (same 10..63 scale, higher = smaller):
+  // the sensor encodes JPEG in hardware, so this is free and keeps the stream light on WiFi.
+  uint8_t live_jpeg_quality = 30;
   friend bool operator==(const CameraSettings&, const CameraSettings&) = default;
 };
 

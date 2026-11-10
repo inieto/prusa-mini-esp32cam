@@ -34,7 +34,7 @@ struct FakeCamera : core::CameraPort {
   uint32_t captures = 0;
   uint32_t previews = 0;
   core::Result<core::FrameRef> capture(core::CaptureKind kind) override {
-    if (kind == core::CaptureKind::Preview) ++previews;
+    if (kind != core::CaptureKind::Snapshot) ++previews;
     ++captures;
     if (!failures.empty()) {
       auto e = failures.front();

@@ -11,9 +11,11 @@
 
 namespace core {
 
-// Preview frames feed the live stream: never fire the flash (5 fps of LED pulses with lead
-// time would be useless and blinding).
-enum class CaptureKind : uint8_t { Snapshot, Preview };
+// Snapshot: scheduled capture (flash if configured, snapshot quality).
+// Still: on-demand frame for the web UI (snapshot quality, never the flash).
+// Preview: live view frame (live view quality, never the flash: LED pulses at several fps with
+// lead time would be useless and blinding).
+enum class CaptureKind : uint8_t { Snapshot, Still, Preview };
 
 struct CameraPort {
   virtual ~CameraPort() = default;

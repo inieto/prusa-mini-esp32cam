@@ -100,10 +100,11 @@ void service_task(void* arg) {
     if (now - last_tick >= core::Millis{1000}) {
       last_tick = now;
       ctx.service.tick();
-    } else if (ctx.service.consume_preview_request() ||
-               (ctx.stream.wants_frame() && now - last_preview >= kPreviewPeriod)) {
+    } else if (ctx.service.consume_preview_request()) {
+      ctx.service.capture_preview(core::CaptureKind::Still);  // Refresh in the web UI
+    } else if (ctx.stream.wants_frame() && now - last_preview >= kPreviewPeriod) {
       last_preview = now;
-      ctx.service.capture_preview();
+      ctx.service.capture_preview(core::CaptureKind::Preview);
     }
     esp_task_wdt_reset();
     device::note_uptime(static_cast<uint32_t>(g_clock.now().count() / 1000));

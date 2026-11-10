@@ -193,6 +193,7 @@ void EspCamera::apply_sensor(const core::CameraSettings& s) {
   sensor_t* sensor = esp_camera_sensor_get();
   if (!sensor) return;
   sensor->set_quality(sensor, s.jpeg_quality);
+  sensor_quality_ = s.jpeg_quality;
   sensor->set_brightness(sensor, s.brightness);
   sensor->set_contrast(sensor, s.contrast);
   sensor->set_saturation(sensor, s.saturation);
@@ -274,8 +275,17 @@ core::Result<core::FrameRef> EspCamera::capture(core::CaptureKind kind) {
     set_led_duty(s.flash_duty_pct);
     vTaskDelay(pdMS_TO_TICKS(s.flash_lead_ms));
   }
-  if (flash || fb_count_ == 1) {
-    // Drop the frame exposed before the LED was on, or the one waiting in the single buffer.
+  // Snapshots and live frames use different JPEG quality. The register applies from the next
+  // frame on, so after a switch the frames already queued in the driver are dropped.
+  const uint8_t quality = kind == core::CaptureKind::Preview ? s.live_jpeg_quality : s.jpeg_quality;
+  int stale_frames = flash || fb_count_ == 1 ? 1 : 0;
+  if (quality != sensor_quality_) {
+    if (sensor_t* sensor = esp_camera_sensor_get()) sensor->set_quality(sensor, quality);
+    sensor_quality_ = quality;
+    stale_frames = fb_count_;
+  }
+  for (int i = 0; i < stale_frames; ++i) {
+    // Drop frames exposed before the LED was on, with the old quality, or waiting in the buffer.
     if (camera_fb_t* stale = esp_camera_fb_get()) esp_camera_fb_return(stale);
   }
 

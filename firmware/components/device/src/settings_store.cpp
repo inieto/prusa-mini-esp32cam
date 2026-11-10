@@ -4,6 +4,7 @@
 #include <nvs.h>
 #include <nvs_flash.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <type_traits>
 
@@ -80,12 +81,16 @@ core::Result<void> SettingsStore::init_flash() {
   return {};
 }
 
+bool valid_tx_power(int dbm) { return dbm >= 8 && dbm <= 20; }
+
 WifiCredentials SettingsStore::load_wifi() const {
   Nvs nvs("wifi", NVS_READONLY);
   WifiCredentials w;
   w.ssid = nvs.str("ssid");
   w.password = nvs.str("pass");
   w.hostname = nvs.str("host", w.hostname);
+  const int tx = std::atoi(nvs.str("txpwr", "20").c_str());
+  w.tx_power_dbm = static_cast<uint8_t>(valid_tx_power(tx) ? tx : 20);
   return w;
 }
 
@@ -94,6 +99,7 @@ core::Result<void> SettingsStore::save_wifi(const WifiCredentials& w) {
   nvs.set("ssid", w.ssid);
   nvs.set("pass", w.password);
   nvs.set("host", w.hostname);
+  nvs.set("txpwr", std::to_string(w.tx_power_dbm));
   return nvs.commit();
 }
 
@@ -119,14 +125,17 @@ core::CameraSettings SettingsStore::load_camera() const {
   CameraBlob blob{};
   const size_t len = nvs.blob_prefix("settings", &blob, sizeof blob);
   if (len == 0) return {};
-  if (blob.schema == 1) {
-    // Schema 1 predates framing; the fields were appended, so its bytes are a prefix. Whatever
-    // lies beyond it was zero-filled above: give the new fields their defaults.
+  if (blob.schema < kCameraSchema) {
+    // Older schemas are prefixes (fields are only ever appended). Whatever lies beyond them was
+    // zero-filled above: give those fields their defaults. 1: no framing, 2: no live quality.
     const core::CameraSettings defaults;
     if (blob.settings.zoom_pct == 0) {
       blob.settings.zoom_pct = defaults.zoom_pct;
       blob.settings.pan_x = defaults.pan_x;
       blob.settings.pan_y = defaults.pan_y;
+    }
+    if (blob.settings.live_jpeg_quality == 0) {
+      blob.settings.live_jpeg_quality = defaults.live_jpeg_quality;
     }
   } else if (blob.schema != kCameraSchema || len != sizeof blob) {
     return {};

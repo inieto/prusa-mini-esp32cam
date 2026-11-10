@@ -76,8 +76,8 @@ void SnapshotService::tick() {
   status_.without_network_success = recovery_.since_last_success(now);
 }
 
-void SnapshotService::capture_preview() {
-  Result<FrameRef> frame = deps_.camera.capture(CaptureKind::Preview);
+void SnapshotService::capture_preview(CaptureKind kind) {
+  Result<FrameRef> frame = deps_.camera.capture(kind);
   if (!frame) return;
   std::lock_guard lock(mutex_);
   latest_ = std::move(*frame);

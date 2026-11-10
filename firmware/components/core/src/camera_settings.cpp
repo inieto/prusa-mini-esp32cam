@@ -50,7 +50,7 @@ Result<void> validate(const CameraSettings& s) {
                   in_range(static_cast<int>(s.rotation), 0, 3) &&
                   in_range(s.flash_lead_ms, 0, 2000) && in_range(s.flash_duty_pct, 0, 100) &&
                   in_range(s.zoom_pct, 100, 400) && in_range(s.pan_x, -100, 100) &&
-                  in_range(s.pan_y, -100, 100);
+                  in_range(s.pan_y, -100, 100) && in_range(s.live_jpeg_quality, 10, 63);
   if (!ok) return fail(Errc::OutOfRange);
   return {};
 }

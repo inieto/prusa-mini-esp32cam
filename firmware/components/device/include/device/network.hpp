@@ -41,6 +41,7 @@ class Network final : public core::NetworkInfo {
   core::connect::Mac efuse_mac() const;
 
   void reconnect();  // drop and re-associate (recovery ladder step 2)
+  void set_tx_power(uint8_t dbm);  // applies at once, no reconnect needed
   std::vector<ScanResult> scan();  // blocking, ~2-3 s
 
  private:

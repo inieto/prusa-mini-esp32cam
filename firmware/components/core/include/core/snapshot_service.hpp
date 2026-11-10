@@ -79,10 +79,10 @@ class SnapshotService {
   // Drive from the owning task roughly once per second.
   void tick();
 
-  // Owning task only, while someone watches the live stream: a flash-less capture that becomes
-  // the latest frame (web UI, stream) without uploads or observers. Errors are not counted:
-  // a busy pool just means the stream skips a frame.
-  void capture_preview();
+  // Owning task only: a flash-less capture (Still for Refresh, Preview for the live view) that
+  // becomes the latest frame without uploads or observers. Errors are not counted: a busy pool
+  // just means the stream skips a frame.
+  void capture_preview(CaptureKind kind = CaptureKind::Preview);
 
   // Thread-safe requests.
   void request_snapshot() { snapshot_requested_ = true; }

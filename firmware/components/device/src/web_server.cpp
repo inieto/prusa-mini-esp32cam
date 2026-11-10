@@ -514,14 +514,20 @@ esp_err_t WebServer::network_config(httpd_req_t* req, bool update) {
     if (has_host && (!is_valid_hostname(host) || host.find('.') != std::string::npos)) {
       return send_error(req, "400 Bad Request", "invalid name (letters, digits and hyphens)");
     }
+    const cJSON* tx = cJSON_GetObjectItemCaseSensitive(j.get(), "tx_power_dbm");
+    if (tx && (!cJSON_IsNumber(tx) || !valid_tx_power(tx->valueint))) {
+      return send_error(req, "400 Bad Request", "transmit power must be 8 to 20 dBm");
+    }
     if (has_ssid) wifi.ssid = ssid;
     if (has_pass) wifi.password = pass;
     if (has_host) wifi.hostname = host;
+    if (tx) wifi.tx_power_dbm = static_cast<uint8_t>(tx->valueint);
     if (auto r = d_.store.save_wifi(wifi); !r) return send_error(req, "500 Internal Server Error", "could not save");
-    reboot_required = true;
+    if (tx) d_.network.set_tx_power(wifi.tx_power_dbm);  // live, nothing to reboot for
+    reboot_required = has_ssid || has_pass || has_host;
     // Without a working station (first setup or fallback AP) there is nothing to keep running:
     // reboot straight away so the camera joins the new network without another click.
-    if (!d_.network.connected() && !wifi.ssid.empty()) {
+    if (reboot_required && !d_.network.connected() && !wifi.ssid.empty()) {
       reboot_later(d_.system);
       rebooting = true;
     }
@@ -530,6 +536,7 @@ esp_err_t WebServer::network_config(httpd_req_t* req, bool update) {
   cJSON_AddStringToObject(j.get(), "ssid", wifi.ssid.c_str());
   cJSON_AddBoolToObject(j.get(), "password_set", !wifi.password.empty());
   cJSON_AddStringToObject(j.get(), "hostname", wifi.hostname.c_str());
+  cJSON_AddNumberToObject(j.get(), "tx_power_dbm", wifi.tx_power_dbm);
   cJSON_AddBoolToObject(j.get(), "reboot_required", reboot_required);
   cJSON_AddBoolToObject(j.get(), "rebooting", rebooting);
   return send_json(req, "200 OK", print(j.get()));

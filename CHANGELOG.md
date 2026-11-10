@@ -10,6 +10,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Framing: digital zoom (up to the sensor's limit, e.g. 2.56× at 800×600 with the OV3660) and
   pan, done by the sensor's windowing so zoomed frames keep real detail and cost nothing extra.
   Adjusted live from *Camera → Framing* while watching the live view (ADR-0015).
+- Separate JPEG quality for the live view (default 30, snapshots keep theirs): the sensor
+  encodes in hardware, so lighter live frames cost nothing and leave WiFi room for the rest.
+- Configurable WiFi transmit power (*Network*), applied at once. Lower peaks help marginal
+  5 V supplies, where heavy traffic made the router drop the camera (reason 34, missing ACKs).
 
 ### Fixed
 - An upload on a keep-alive connection the server had already closed counted as a failure and

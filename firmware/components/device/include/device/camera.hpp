@@ -55,6 +55,7 @@ class EspCamera final : public core::CameraPort {
   std::optional<core::CameraSettings> pending_;
   bool driver_started_ = false;
   uint8_t fb_count_ = 2;
+  uint8_t sensor_quality_ = 0;  // JPEG quality currently programmed in the sensor
   bool light_on_ = false;
   uint32_t sequence_ = 0;
   std::string sensor_name_ = "unknown";

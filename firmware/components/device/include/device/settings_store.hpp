@@ -17,7 +17,11 @@ struct WifiCredentials {
   std::string ssid;
   std::string password;
   std::string hostname = "prusacam";
+  // Max transmit power. Lower peaks draw less current: with a strong signal (-50 dBm) 13 dBm is
+  // plenty, and it avoids drops on marginal 5 V supplies ("missing ACKs", reason 34).
+  uint8_t tx_power_dbm = 20;
 };
+bool valid_tx_power(int dbm);  // 8..20
 
 class SettingsStore {
  public:
@@ -42,7 +46,7 @@ class SettingsStore {
   core::Result<void> save_storage(const core::StorageSettings& storage);
 
  private:
-  static constexpr uint8_t kCameraSchema = 2;  // 2: framing (zoom/pan) appended
+  static constexpr uint8_t kCameraSchema = 3;  // 2: framing appended, 3: live view quality
   static constexpr uint8_t kStorageSchema = 1;
 };
 

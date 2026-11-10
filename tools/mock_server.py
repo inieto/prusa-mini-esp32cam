@@ -28,12 +28,13 @@ state = {
         "ae_level": 0, "manual_exposure": 300, "auto_gain": True, "gain_ceiling": 4,
         "manual_gain": 0, "auto_white_balance": True, "lens_correction": True,
         "flash_on_capture": False, "flash_lead_ms": 200, "flash_duty_pct": 80,
-        "zoom_pct": 100, "pan_x": 0, "pan_y": 0,
+        "zoom_pct": 100, "pan_x": 0, "pan_y": 0, "live_jpeg_quality": 30,
         "sensor": "OV3660", "max_resolution": "qxga", "max_zoom_pct": 256,  # read-only
     },
     "connect": {"token_set": True, "hostname": "connect.prusa3d.com",
                 "fingerprint": "MjQ4MTc5MTgzMTY4NjkxMzIgMDA6MDA6MDA6MDA6MDA6MDA="},
-    "network": {"ssid": "nietogiardinieri", "password_set": True, "hostname": "prusa-esp32cam"},
+    "network": {"ssid": "nietogiardinieri", "password_set": True, "hostname": "prusa-esp32cam",
+                "tx_power_dbm": 20},
     "coredump": {"size": 65536 - 4096, "task": "httpd", "pc": "0x400d1234",
                  "reason": "LoadProhibited"},  # set to None to simulate a clean device
     "printer": {"host": "192.168.0.50", "user": "maker", "password_set": True,
