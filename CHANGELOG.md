@@ -11,6 +11,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
   without WiFi and double-blinks when PrusaConnect uploads fail. Can be switched off in *System*.
 - Sharpness and noise reduction (OV3660/OV5640) and a fixed white balance preset (all sensors)
   in *Camera*.
+- The last 6 KB of log survive crashes, watchdogs and software reboots (RTC memory, not power
+  loss): *System → Before the last reboot* shows them with the reset reason (ADR-0017).
 - Read-only API token (*System*): snapshot, live stream and status for integrations without
   logging in, via `Authorization: Bearer` or `?token=`; it cannot change anything (ADR-0016).
 

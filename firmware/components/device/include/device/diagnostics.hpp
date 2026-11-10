@@ -3,12 +3,16 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace device {
 
-// Tees every ESP_LOG line into a ring buffer in PSRAM (visible in the web UI).
+// Tees every ESP_LOG line into a ring buffer in PSRAM (visible in the web UI) and into a small
+// ring in RTC memory that survives crashes, watchdogs and software reboots (not power loss).
 void install_log_buffer(size_t capacity);
+// The RTC log tail left by the previous run (empty after a power-on or if it was damaged).
+std::string_view previous_log();
 std::string log_snapshot();
 // Log text written since `cursor` (a running byte count, start at 0); advances the cursor.
 // If more than the ring holds was written meanwhile, the oldest part is lost.

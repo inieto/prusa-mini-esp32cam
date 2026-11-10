@@ -21,3 +21,4 @@ it. Template: [`0000-template.md`](0000-template.md).
 | [0014](0014-mjpeg-live-stream.md) | MJPEG live view through an async HTTP handler, one viewer | accepted |
 | [0015](0015-sensor-framing.md) | Digital zoom and pan through the sensor's windowing | accepted |
 | [0016](0016-read-only-api-token.md) | Read-only API token for integrations | accepted |
+| [0017](0017-rtc-log-tail.md) | Keep the last log lines in RTC memory across resets | accepted |

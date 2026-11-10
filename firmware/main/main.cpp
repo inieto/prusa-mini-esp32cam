@@ -128,6 +128,10 @@ extern "C" void app_main() {
   const std::string_view reset_reason = device::last_reset_reason();
   ESP_LOGI(kTag, "PrusaCam byClaude %s, previous reset: %.*s", app->version,
            static_cast<int>(reset_reason.size()), reset_reason.data());
+  if (!device::previous_log().empty()) {
+    ESP_LOGI(kTag, "%u bytes of log from the previous run kept (System → Before the last reboot)",
+             static_cast<unsigned>(device::previous_log().size()));
+  }
 
   if (auto r = device::SettingsStore::init_flash(); !r) ESP_LOGE(kTag, "NVS init failed");
   device::record_boot(reset_reason);

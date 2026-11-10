@@ -6,10 +6,14 @@
 #include <freertos/FreeRTOS.h>
 #include <nvs.h>
 
+#include <esp_system.h>
+
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+
+#include "core/log_tail.hpp"
 
 namespace device {
 namespace {
@@ -22,6 +26,14 @@ bool g_wrapped = false;
 uint64_t g_total = 0;  // bytes ever written, for incremental readers (SD log)
 portMUX_TYPE g_ring_lock = portMUX_INITIALIZER_UNLOCKED;
 vprintf_like_t g_previous = nullptr;
+
+// Last 6 KB of log in RTC slow memory: not initialised at boot, so it still holds the previous
+// run's text after a panic, watchdog or software reset (ADR-0017).
+RTC_NOINIT_ATTR core::LogTail::Storage g_rtc_storage;
+core::LogTail g_rtc_tail{g_rtc_storage};
+// Copy taken once at boot, in PSRAM: internal RAM is the scarce one.
+char* g_previous_log = nullptr;
+size_t g_previous_size = 0;
 
 int tee_vprintf(const char* fmt, va_list args) {
   char line[256];
@@ -40,6 +52,7 @@ int tee_vprintf(const char* fmt, va_list args) {
       }
     }
     g_total += static_cast<uint64_t>(n);
+    g_rtc_tail.append({line, static_cast<size_t>(n)});
     portEXIT_CRITICAL(&g_ring_lock);
   }
   return g_previous ? g_previous(fmt, args) : std::vprintf(fmt, args);
@@ -59,11 +72,24 @@ constexpr size_t kHistory = 8;
 }  // namespace
 
 void install_log_buffer(size_t capacity) {
+  // After a power-on (which includes the board's reset button: it cuts the chip's supply) RTC
+  // memory holds random bits; any other reset keeps it.
+  const bool trust = esp_reset_reason() != ESP_RST_POWERON;
+  const std::string previous = g_rtc_tail.take_previous(trust);
+  if (!previous.empty()) {
+    g_previous_log = static_cast<char*>(heap_caps_malloc(previous.size(), MALLOC_CAP_SPIRAM));
+    if (g_previous_log) {
+      std::memcpy(g_previous_log, previous.data(), previous.size());
+      g_previous_size = previous.size();
+    }
+  }
   g_ring = static_cast<char*>(heap_caps_calloc(1, capacity, MALLOC_CAP_SPIRAM));
   if (!g_ring) return;
   g_capacity = capacity;
   g_previous = esp_log_set_vprintf(tee_vprintf);
 }
+
+std::string_view previous_log() { return {g_previous_log, g_previous_size}; }
 
 std::string log_snapshot() {
   std::string out;

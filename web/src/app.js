@@ -568,6 +568,7 @@ async function renderSystem() {
   const fw = s.firmware || {};
   const kv = (label, value) => [h('label', { class: 'key', text: label }), h('div', { class: 'value strong', text: value })];
   const logs = h('pre', { class: 'log', text: 'Loading…' });
+  const previousLog = h('div', {});
   view.replaceChildren(
     h('h2', { text: 'Device' }),
     h('div', { class: 'form' },
@@ -603,9 +604,26 @@ async function renderSystem() {
       h('div', { class: 'hint', text: 'Forgets the web user, WiFi, PrusaConnect token and camera settings. Same as holding GPIO12 to GND for 10 s at power-on.' })),
     h('h2', { text: 'Log' }),
     logs,
+    previousLog,
   );
   logs.textContent = await api('logs');
   logs.scrollTop = logs.scrollHeight;
+  // The last lines before the previous reboot, kept in RTC memory (lost only on power loss).
+  const before = await api('logs/previous');
+  if (before) {
+    const reason = (s.resets && s.resets[0] && s.resets[0].reason) || 'unknown';
+    const pre = h('pre', { class: 'log', text: before, hidden: true });
+    const toggle = h('button', { class: 'btn medium', type: 'button', text: 'Show log before the last reboot' });
+    toggle.addEventListener('click', () => {
+      pre.hidden = !pre.hidden;
+      toggle.textContent = pre.hidden ? 'Show log before the last reboot' : 'Hide log before the last reboot';
+      if (!pre.hidden) pre.scrollTop = pre.scrollHeight;
+    });
+    previousLog.replaceChildren(
+      h('h2', { text: 'Before the last reboot' }),
+      h('p', { class: 'lead', text: `Last lines of the previous run, which ended by: ${reason}` }),
+      h('div', { class: 'form-actions' }, toggle), pre);
+  }
 }
 
 // ---------- status header ----------

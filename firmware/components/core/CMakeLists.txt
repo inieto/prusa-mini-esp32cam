@@ -6,6 +6,7 @@ set(CORE_SOURCES
     src/camera_settings.cpp
     src/exif.cpp
     src/frame_pool.cpp
+    src/log_tail.cpp
     src/mqtt_discovery.cpp
     src/ports.cpp
     src/prusa_connect.cpp

@@ -154,6 +154,12 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             return self.wfile.write(data)
+        if path == "logs/previous":
+            body = b"00:41:10 I core: upload ok\n00:41:12 E camera: capture timeout\n00:41:20 W main: watchdog\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            return self.wfile.write(body)
         if path == "logs":
             body = b"00:00:01 I boot: PrusaCam byClaude 0.1.0-mock\n00:00:03 I wifi: connected\n"
             self.send_response(200)
