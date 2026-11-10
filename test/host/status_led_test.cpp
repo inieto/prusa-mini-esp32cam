@@ -4,10 +4,12 @@
 
 using namespace core;
 
-TEST(StatusLed, DarkWhenAllIsWell) {
-  EXPECT_EQ(status_pattern(true, false, ConnectState::Online), LedPattern::Off);
-  EXPECT_EQ(status_pattern(true, false, ConnectState::NotConfigured), LedPattern::Off);
-  for (uint32_t t = 0; t < 32; ++t) EXPECT_FALSE(led_on(LedPattern::Off, t));
+TEST(StatusLed, OneBlipPerMinuteWhenAllIsWell) {
+  EXPECT_EQ(status_pattern(true, false, ConnectState::Online), LedPattern::Heartbeat);
+  EXPECT_EQ(status_pattern(true, false, ConnectState::NotConfigured), LedPattern::Heartbeat);
+  int on = 0;
+  for (uint32_t t = 0; t < 480 * 3; ++t) on += led_on(LedPattern::Heartbeat, t);
+  EXPECT_EQ(on, 3);  // three minutes, three 125 ms blips
 }
 
 TEST(StatusLed, SlowBlinkWithoutWifiOrOnTheSetupAp) {

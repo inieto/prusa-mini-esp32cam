@@ -594,7 +594,7 @@ async function renderSystem() {
     h('div', { class: 'form' },
       h('label', { class: 'key', for: 'f-status-led', text: 'Status LED' }),
       h('div', { class: 'value' }, statusLedSwitch(device.status_led)),
-      h('div', { class: 'hint', text: 'Red LED on the back: off when all is well, slow blink without WiFi, double blink when uploads fail' }),
+      h('div', { class: 'hint', text: 'Red LED on the back: one short blink per minute when all is well, slow blink without WiFi, double blink when uploads fail' }),
       apiTokenRows(apiToken.set),
       h('label', { class: 'key', text: 'Factory reset' }),
       h('div', { class: 'value' }, confirmButton('Erase settings', 'Click again to erase', async () => {

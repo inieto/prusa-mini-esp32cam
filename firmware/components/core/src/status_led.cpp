@@ -13,15 +13,15 @@ LedPattern status_pattern(bool wifi_connected, bool setup_ap, ConnectState conne
     case ConnectState::NotConfigured:
     case ConnectState::Starting:
     case ConnectState::Online:
-      return LedPattern::Off;
+      return LedPattern::Heartbeat;
   }
-  return LedPattern::Off;
+  return LedPattern::Heartbeat;
 }
 
 bool led_on(LedPattern pattern, uint32_t tick) {
   const uint32_t t = tick % 16;
   switch (pattern) {
-    case LedPattern::Off: return false;
+    case LedPattern::Heartbeat: return tick % 480 == 0;     // 125 ms blip every 60 s
     case LedPattern::SlowBlink: return t < 8;                 // 1 s on, 1 s off
     case LedPattern::DoubleBlink: return t == 0 || t == 2;    // blip-blip, then 1.6 s dark
   }

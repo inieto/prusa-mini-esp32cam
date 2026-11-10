@@ -1,5 +1,5 @@
-// What the red status LED (GPIO33) shows. Off when everything is fine: it sits next to the
-// printer, often in a dark room. Pure, host-tested.
+// What the red status LED (GPIO33) shows. When everything is fine it only blips once a minute
+// (alive, but unobtrusive: it sits next to the printer, often in a dark room). Pure, host-tested.
 #pragma once
 
 #include <cstdint>
@@ -9,14 +9,15 @@
 namespace core {
 
 enum class LedPattern : uint8_t {
-  Off,          // all good (or nothing configured yet)
+  Heartbeat,    // all good (or nothing configured yet): one short blip per minute
   SlowBlink,    // no WiFi: connecting, or the setup AP is up
   DoubleBlink,  // WiFi fine, but PrusaConnect uploads are failing
 };
 
 LedPattern status_pattern(bool wifi_connected, bool setup_ap, ConnectState connect);
 
-// LED state for a pattern at a given 125 ms tick (patterns repeat every 2 s = 16 ticks).
+// LED state for a pattern at a given 125 ms tick. Blink patterns repeat every 2 s (16 ticks), the
+// heartbeat every minute (480 ticks).
 bool led_on(LedPattern pattern, uint32_t tick);
 
 }  // namespace core
