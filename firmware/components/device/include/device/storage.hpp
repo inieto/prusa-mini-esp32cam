@@ -59,6 +59,7 @@ class Storage final : public core::FrameObserver {
   void flush_log();
   void save_frame(const core::FrameRef& frame, const core::TimelapseTarget& target);
   void rotate_logs();
+  void save_coredump();
 
   const core::Clock& clock_;
   const core::WallClock& wall_;

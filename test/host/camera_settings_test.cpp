@@ -28,8 +28,11 @@ TEST(CameraSettings, ResolutionTableRoundTrips) {
 }
 
 TEST(CameraSettings, FrameBudgetFitsThreeSlotsInPsram) {
-  // Worst case: 3 QXGA slots (OV3660) must fit in 2 MB of PSRAM next to the driver's buffers.
-  EXPECT_LT(3 * max_jpeg_size(Resolution::QXGA), 2u * 1024 * 1024);
+  // Worst case (OV3660 at QXGA): 3 slots + one driver buffer must leave ~0.8 MB of the 4 MB.
+  EXPECT_LT(3 * max_jpeg_size(Resolution::QXGA) + driver_jpeg_buffer(Resolution::QXGA),
+            3300u * 1024);
+  // SVGA buffer must hold the ~100 KB OV3660 frames that overflowed the driver default.
+  EXPECT_GT(driver_jpeg_buffer(Resolution::SVGA), 150u * 1024);
   EXPECT_GT(max_jpeg_size(Resolution::VGA), 12u * 1024);  // > the 12.9 KB we observed
   EXPECT_EQ(size_of(Resolution::QXGA), (Size{2048, 1536}));
 }

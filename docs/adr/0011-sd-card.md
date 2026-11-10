@@ -25,6 +25,8 @@ flash-voltage strap (GPIO12).
   sanitised in the core (no `..`, no absolute paths). Reads and deletes run in the HTTP task —
   FATFS serialises access per volume, and contending with a 10-second log append is harmless.
   Only JPEGs open inline; everything else downloads (the card can never serve HTML).
+- **Crash dumps** cannot be written to the card by the panic handler; at mount time a dump
+  found in the flash partition is copied to `/coredumps/` and the partition erased.
 - All path, naming, rotation and timelapse rules are pure core code with host tests.
 
 ## Consequences

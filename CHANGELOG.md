@@ -41,6 +41,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
   the UI (ADR-0010).
 - Crash dumps: after a panic the *System* tab shows the task, PC and reason, and the ELF can be
   downloaded for `idf.py coredump-info` or erased.
+  With an SD card the dump is moved to `/coredumps/` at boot, keeping a history.
 - SD card support (1-bit mode, FAT32): the log is kept in one file per day with 14-day rotation
   (F6), and a timelapse can record always or only while printing (one folder per print). New
   *Storage* tab with the settings and a file browser to open, download and delete files
@@ -72,6 +73,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Code, docs, ADRs, web UI and changelog are now in English.
 
 ### Fixed
+- OV3660 frames overflowed the camera driver's default JPEG buffer (`FB-OVF`, frames dropped):
+  the buffer is now sized explicitly per resolution. Seen on hardware.
 - The web UI was shown as raw HTML: the `Content-Type` of the UI files pointed to memory that
   had already been freed. Tested on hardware (board with OV3660).
 - The UI ETag now includes the firmware hash, so an update that changes headers is not hidden

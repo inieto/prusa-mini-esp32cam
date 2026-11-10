@@ -8,10 +8,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 
 #include "device/diagnostics.hpp"
+#include "device/firmware.hpp"
 
 namespace device {
 namespace {
@@ -96,7 +98,10 @@ void Storage::run() {
     if (!mounted_ && (first || now - last_mount_try >= kMountRetry)) {
       first = false;
       last_mount_try = now;
-      if (mount()) rotate_logs();
+      if (mount()) {
+        rotate_logs();
+        save_coredump();
+      }
     }
     if (!mounted_) continue;
 
@@ -206,6 +211,41 @@ void Storage::rotate_logs() {
     unlink(absolute("logs/" + old).c_str());
     ESP_LOGI(kTag, "deleted old log %s", old.c_str());
   }
+}
+
+// A panic can only write its dump to the flash partition (no filesystem in the panic handler).
+// Once a card is mounted the dump moves here, which frees the partition for the next crash and
+// keeps a history instead of only the latest one.
+void Storage::save_coredump() {
+  const auto dump = coredump_info();
+  if (!dump || !make_dirs("coredumps")) return;
+  char name[48];
+  if (const auto t = wall_.utc_now()) {
+    std::snprintf(name, sizeof name, "%04u-%02u-%02u_%02u%02u%02u_%.10s.elf", t->year, t->month,
+                  t->day, t->hour, t->minute, t->second, dump->task.c_str());
+  } else {
+    const auto existing = list("coredumps");
+    std::snprintf(name, sizeof name, "undated_%03u_%.10s.elf",
+                  static_cast<unsigned>(existing ? existing->size() + 1 : 1), dump->task.c_str());
+  }
+  const std::string path = absolute(std::string("coredumps/") + name);
+  FILE* f = std::fopen(path.c_str(), "wb");
+  if (!f) return;
+  uint8_t buffer[512];
+  bool ok = true;
+  for (size_t offset = 0; ok && offset < dump->size;) {
+    const size_t n = std::min(sizeof buffer, dump->size - offset);
+    ok = read_coredump(offset, {buffer, n}) && std::fwrite(buffer, 1, n, f) == n;
+    offset += n;
+  }
+  ok = std::fclose(f) == 0 && ok;
+  if (!ok) {
+    unlink(path.c_str());  // keep the dump in flash and try again on the next mount
+    return;
+  }
+  erase_coredump();
+  ESP_LOGW(kTag, "crash dump (task %s, %s) moved to %s", dump->task.c_str(), dump->reason.c_str(),
+           path.c_str());
 }
 
 SdUsage Storage::usage() const {

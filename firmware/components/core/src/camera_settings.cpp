@@ -30,11 +30,14 @@ std::optional<Resolution> resolution_for(Size size) {
 
 std::span<const Resolution> all_resolutions() { return kResolutions; }
 
-size_t max_jpeg_size(Resolution resolution) {
+size_t driver_jpeg_buffer(Resolution resolution) {
   const Size s = size_of(resolution);
   const size_t pixels = size_t{s.width} * s.height;
-  // esp32-camera allocates width*height/5 per JPEG frame buffer; nothing larger can arrive.
-  return pixels / 5 + 16 * 1024;  // headroom for EXIF and headers
+  return pixels / (resolution > Resolution::UXGA ? 4 : 3);
+}
+
+size_t max_jpeg_size(Resolution resolution) {
+  return driver_jpeg_buffer(resolution) + 16 * 1024;  // headroom for EXIF and headers
 }
 
 Result<void> validate(const CameraSettings& s) {

@@ -453,7 +453,10 @@ function firmwareUpdate() {
 }
 
 function coredumpRows(dump) {
-  if (!dump) return [h('label', { class: 'key', text: 'Crash dump' }), h('div', { class: 'value', text: 'none stored' })];
+  if (!dump) {
+    return [h('label', { class: 'key', text: 'Crash dump' }),
+            h('div', { class: 'value', text: 'none in flash (with an SD card, dumps are moved to /coredumps)' })];
+  }
   return [
     h('label', { class: 'key', text: 'Crash dump' }),
     h('div', { class: 'value strong', text: `${dump.reason || 'crash'} · task ${dump.task || '?'} · pc ${dump.pc} · ${Math.round(dump.size / 1024)} KB` }),

@@ -118,9 +118,13 @@ core::Result<void> EspCamera::start_driver(core::Resolution resolution, uint8_t 
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size = to_framesize(resolution);
   config.jpeg_quality = quality;
-  config.fb_count = 2;
+  config.jpeg_buffer_size = core::driver_jpeg_buffer(resolution);
+  // Two buffers keep the latest frame ready; at QXGA only one fits in PSRAM, and capture()
+  // then drops the frame that waited in it (taken whenever the previous one was returned).
+  fb_count_ = resolution > core::Resolution::UXGA ? 1 : 2;
+  config.fb_count = fb_count_;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.grab_mode = CAMERA_GRAB_LATEST;  // with 2 buffers the frame is never stale
+  config.grab_mode = fb_count_ == 1 ? CAMERA_GRAB_WHEN_EMPTY : CAMERA_GRAB_LATEST;
 
   const esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
@@ -214,7 +218,9 @@ core::Result<core::FrameRef> EspCamera::capture(core::CaptureKind kind) {
   if (flash) {
     set_led_duty(s.flash_duty_pct);
     vTaskDelay(pdMS_TO_TICKS(s.flash_lead_ms));
-    // Drop the frame exposed before the LED was on.
+  }
+  if (flash || fb_count_ == 1) {
+    // Drop the frame exposed before the LED was on, or the one waiting in the single buffer.
     if (camera_fb_t* stale = esp_camera_fb_get()) esp_camera_fb_return(stale);
   }
 

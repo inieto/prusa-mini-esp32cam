@@ -46,8 +46,12 @@ struct CameraSettings {
   friend bool operator==(const CameraSettings&, const CameraSettings&) = default;
 };
 
-// Largest JPEG the camera driver can hand us at this resolution (it sizes its own buffers as
-// width*height/5 and truncates beyond that), plus headroom for EXIF. Used to size FramePool slots.
+// JPEG buffer we ask the camera driver for. Its default (width*height/5) overflows with the
+// OV3660 at good quality ("FB-OVF", frame dropped): 1/3 byte per pixel up to UXGA, 1/4 at QXGA
+// where PSRAM is tight. A JPEG larger than this cannot reach us.
+size_t driver_jpeg_buffer(Resolution resolution);
+
+// FramePool slot size: the driver buffer plus headroom for the EXIF block we prepend.
 size_t max_jpeg_size(Resolution resolution);
 
 Result<void> validate(const CameraSettings& settings);
