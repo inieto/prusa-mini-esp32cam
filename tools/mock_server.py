@@ -157,7 +157,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             return self.wfile.write(data)
         if path == "logs/previous":
-            body = b"00:41:10 I core: upload ok\n00:41:12 E camera: capture timeout\n00:41:20 W main: watchdog\n"
+            body = b"" if os.environ.get("MOCK_NO_PREVIOUS") else b"00:41:10 I core: upload ok\n00:41:12 E camera: capture timeout\n00:41:20 W main: watchdog\n"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
