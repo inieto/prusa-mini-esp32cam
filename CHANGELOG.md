@@ -6,20 +6,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Pending
+- 48 h soak against PrusaConnect on hardware.
+- Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, GPIO12 factory reset, QXGA and
+  OV2640 framing.
+
+## [1.1.0] - 2026-11-11
+
 ### Added
 - Status LED: the red LED on the back blinks once a minute (half a second) when all is well,
-  blinks slowly without WiFi and double-blinks when PrusaConnect uploads fail. Can be switched off in *System*.
+  blinks slowly without WiFi and double-blinks when PrusaConnect uploads fail. Can be switched
+  off in *System*.
 - Sharpness and noise reduction (OV3660/OV5640) and a fixed white balance preset (all sensors)
   in *Camera*.
 - The last 6 KB of log survive crashes, watchdogs and software reboots (RTC memory, not power
   loss): *System → Before the last reboot* shows them with the reset reason (ADR-0017).
 - Read-only API token (*System*): snapshot, live stream and status for integrations without
   logging in, via `Authorization: Bearer` or `?token=`; it cannot change anything (ADR-0016).
-
-### Pending
-- 48 h soak against PrusaConnect on hardware.
-- Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, GPIO12 factory reset, QXGA and
-  OV2640 framing.
 
 ### Fixed
 - Opening a big SD folder (e.g. a timelapse folder left by v1.1.2) exhausted internal RAM: WiFi
@@ -135,6 +138,7 @@ PrusaConnect uploads, SD mount verified on hardware).
 - The v1.1.2 *fingerprint* is reproduced: with the same token, PrusaConnect keeps recognising the
   migrated camera.
 
-[Unreleased]: https://github.com/inieto/prusa-mini-esp32cam/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/inieto/prusa-mini-esp32cam/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/inieto/prusa-mini-esp32cam/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/inieto/prusa-mini-esp32cam/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/inieto/prusa-mini-esp32cam/releases/tag/v0.2.0
