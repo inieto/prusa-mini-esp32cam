@@ -21,7 +21,7 @@ LedPattern status_pattern(bool wifi_connected, bool setup_ap, ConnectState conne
 bool led_on(LedPattern pattern, uint32_t tick) {
   const uint32_t t = tick % 16;
   switch (pattern) {
-    case LedPattern::Heartbeat: return tick % 480 == 0;     // 125 ms blip every 60 s
+    case LedPattern::Heartbeat: return tick % 480 < 4;      // 500 ms blink every 60 s
     case LedPattern::SlowBlink: return t < 8;                 // 1 s on, 1 s off
     case LedPattern::DoubleBlink: return t == 0 || t == 2;    // blip-blip, then 1.6 s dark
   }

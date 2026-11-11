@@ -7,8 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
-- Status LED: the red LED on the back blinks once a minute when all is well, blinks slowly
-  without WiFi and double-blinks when PrusaConnect uploads fail. Can be switched off in *System*.
+- Status LED: the red LED on the back blinks once a minute (half a second) when all is well,
+  blinks slowly without WiFi and double-blinks when PrusaConnect uploads fail. Can be switched off in *System*.
 - Sharpness and noise reduction (OV3660/OV5640) and a fixed white balance preset (all sensors)
   in *Camera*.
 - The last 6 KB of log survive crashes, watchdogs and software reboots (RTC memory, not power
@@ -20,6 +20,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - 48 h soak against PrusaConnect on hardware.
 - Hardware validation of web OTA, SD timelapse, PrusaLink, MQTT, GPIO12 factory reset, QXGA and
   OV2640 framing.
+
+### Fixed
+- Downloads from the SD card and the crash dump announced no size (they were sent "chunked"),
+  so browsers could not show the total or progress: they now carry `Content-Length`.
 
 ## [1.0.0] - 2026-11-10
 

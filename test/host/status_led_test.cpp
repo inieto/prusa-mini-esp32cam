@@ -9,7 +9,9 @@ TEST(StatusLed, OneBlipPerMinuteWhenAllIsWell) {
   EXPECT_EQ(status_pattern(true, false, ConnectState::NotConfigured), LedPattern::Heartbeat);
   int on = 0;
   for (uint32_t t = 0; t < 480 * 3; ++t) on += led_on(LedPattern::Heartbeat, t);
-  EXPECT_EQ(on, 3);  // three minutes, three 125 ms blips
+  EXPECT_EQ(on, 3 * 4);  // three minutes, three 500 ms blinks (4 ticks of 125 ms each)
+  EXPECT_TRUE(led_on(LedPattern::Heartbeat, 480 + 3));
+  EXPECT_FALSE(led_on(LedPattern::Heartbeat, 480 + 4));
 }
 
 TEST(StatusLed, SlowBlinkWithoutWifiOrOnTheSetupAp) {

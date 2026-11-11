@@ -1,4 +1,4 @@
-// What the red status LED (GPIO33) shows. When everything is fine it only blips once a minute
+// What the red status LED (GPIO33) shows. When everything is fine it blinks once a minute
 // (alive, but unobtrusive: it sits next to the printer, often in a dark room). Pure, host-tested.
 #pragma once
 
@@ -9,7 +9,7 @@
 namespace core {
 
 enum class LedPattern : uint8_t {
-  Heartbeat,    // all good (or nothing configured yet): one short blip per minute
+  Heartbeat,    // all good (or nothing configured yet): one 500 ms blink per minute
   SlowBlink,    // no WiFi: connecting, or the setup AP is up
   DoubleBlink,  // WiFi fine, but PrusaConnect uploads are failing
 };

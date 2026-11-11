@@ -5,6 +5,7 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <sys/stat.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -111,6 +112,48 @@ const char* content_type_for(std::string_view name) {
   if (name.ends_with(".jpg") || name.ends_with(".jpeg")) return "image/jpeg";
   if (name.ends_with(".log") || name.ends_with(".txt")) return "text/plain; charset=utf-8";
   return "application/octet-stream";
+}
+
+// Sends all of `data` with the raw socket API, retrying partial writes and short timeouts.
+bool send_all(httpd_req_t* req, const char* data, size_t len) {
+  int timeouts = 0;
+  while (len > 0) {
+    const int n = httpd_send(req, data, len);
+    if (n == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 5) continue;
+    if (n <= 0) return false;
+    data += n;
+    len -= static_cast<size_t>(n);
+  }
+  return true;
+}
+
+// A download that announces its size, so browsers show the total and progress. httpd_resp_*
+// can only stream a body as "chunked" (no Content-Length), so the response head is written by
+// hand and the body sent raw. `read(buf, max)` returns the bytes it produced; 0 means it failed,
+// and the connection is then closed so the client sees a truncated download, not a wrong file.
+template <class Reader>
+esp_err_t send_download(httpd_req_t* req, const char* type, std::string_view disposition,
+                        size_t length, Reader&& read) {
+  char head[384];
+  const int n = std::snprintf(head, sizeof head,
+                              "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n"
+                              "Content-Disposition: %.*s\r\nCache-Control: no-store\r\n"
+                              "X-Content-Type-Options: nosniff\r\n\r\n",
+                              type, static_cast<unsigned>(length),
+                              static_cast<int>(disposition.size()), disposition.data());
+  if (n <= 0 || static_cast<size_t>(n) >= sizeof head) {
+    return send_error(req, "500 Internal Server Error", "file name too long");
+  }
+  constexpr size_t kChunk = 4096;
+  std::unique_ptr<char[]> buffer(new (std::nothrow) char[kChunk]);
+  if (!buffer) return send_error(req, "500 Internal Server Error", "out of memory");
+  if (!send_all(req, head, static_cast<size_t>(n))) return ESP_FAIL;
+  for (size_t sent = 0; sent < length;) {
+    const size_t got = read(buffer.get(), std::min(kChunk, length - sent));
+    if (got == 0 || !send_all(req, buffer.get(), got)) return ESP_FAIL;
+    sent += got;
+  }
+  return ESP_OK;
 }
 
 bool is_valid_hostname(std::string_view h) {
@@ -641,24 +684,14 @@ esp_err_t WebServer::ota_upload(httpd_req_t* req) {
 esp_err_t WebServer::get_coredump(httpd_req_t* req) {
   const auto dump = coredump_info();
   if (!dump) return send_error(req, "404 Not Found", "no core dump stored");
-  httpd_resp_set_type(req, "application/octet-stream");
-  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-  // Must outlive the response (httpd keeps the pointer).
   const std::string disposition = "attachment; filename=\"coredump-" + d_.version + ".elf\"";
-  httpd_resp_set_hdr(req, "Content-Disposition", disposition.c_str());
-  constexpr size_t kChunk = 4096;
-  std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[kChunk]);
-  if (!buffer) return send_error(req, "500 Internal Server Error", "out of memory");
-  for (size_t offset = 0; offset < dump->size;) {
-    const size_t n = std::min(kChunk, dump->size - offset);
-    if (!read_coredump(offset, {buffer.get(), n})) break;
-    if (httpd_resp_send_chunk(req, reinterpret_cast<const char*>(buffer.get()),
-                              static_cast<ssize_t>(n)) != ESP_OK) {
-      return ESP_FAIL;
-    }
-    offset += n;
-  }
-  return httpd_resp_send_chunk(req, nullptr, 0);
+  size_t offset = 0;
+  return send_download(req, "application/octet-stream", disposition, dump->size,
+                       [&offset](char* buf, size_t max) -> size_t {
+                         if (!read_coredump(offset, {reinterpret_cast<uint8_t*>(buf), max})) return 0;
+                         offset += max;
+                         return max;
+                       });
 }
 
 esp_err_t WebServer::storage_config(httpd_req_t* req, bool update) {
@@ -822,29 +855,24 @@ esp_err_t WebServer::sd_file(httpd_req_t* req) {
   const auto path = path_param(req);
   if (!path || path->empty()) return send_error(req, "400 Bad Request", "invalid path");
   if (!d_.storage.usage().mounted) return send_error(req, "409 Conflict", "no SD card");
-  FILE* f = std::fopen(Storage::absolute(*path).c_str(), "rb");
+  const std::string full = Storage::absolute(*path);
+  struct stat st;
+  if (stat(full.c_str(), &st) != 0 || S_ISDIR(st.st_mode)) {
+    return send_error(req, "404 Not Found", "no such file");
+  }
+  FILE* f = std::fopen(full.c_str(), "rb");
   if (!f) return send_error(req, "404 Not Found", "no such file");
   const std::string name = path->substr(path->rfind('/') == std::string::npos ? 0 : path->rfind('/') + 1);
   const char* type = content_type_for(name);
-  httpd_resp_set_type(req, type);  // string literal: outlives the response
-  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-  httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
   // Only images open inline; anything else downloads (no HTML can be served from the card).
   const std::string disposition =
       std::string(std::string_view(type).starts_with("image/") ? "inline" : "attachment") +
       "; filename=\"" + name + "\"";
-  httpd_resp_set_hdr(req, "Content-Disposition", disposition.c_str());
-  constexpr size_t kChunk = 4096;
-  std::unique_ptr<char[]> buffer(new (std::nothrow) char[kChunk]);
-  esp_err_t err = buffer ? ESP_OK : ESP_ERR_NO_MEM;
-  while (err == ESP_OK) {
-    const size_t n = std::fread(buffer.get(), 1, kChunk, f);
-    if (n == 0) break;
-    err = httpd_resp_send_chunk(req, buffer.get(), static_cast<ssize_t>(n));
-  }
+  // The size is fixed at the stat: a log still being appended is sent as it was at that moment.
+  const esp_err_t err = send_download(req, type, disposition, static_cast<size_t>(st.st_size),
+                                      [f](char* buf, size_t max) { return std::fread(buf, 1, max, f); });
   std::fclose(f);
-  if (err != ESP_OK) return ESP_FAIL;
-  return httpd_resp_send_chunk(req, nullptr, 0);
+  return err;
 }
 
 esp_err_t WebServer::sd_delete(httpd_req_t* req, std::string_view body) {
