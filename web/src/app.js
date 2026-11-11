@@ -643,8 +643,14 @@ async function renderSystem() {
   logs.scrollTop = logs.scrollHeight;
   // The last lines before the previous reboot, kept in RTC memory (lost only on power loss).
   const before = await api('logs/previous');
-  if (before) {
-    const reason = (s.resets && s.resets[0] && s.resets[0].reason) || 'unknown';
+  const reason = (s.resets && s.resets[0] && s.resets[0].reason) || 'unknown';
+  if (!before) {
+    previousLog.replaceChildren(
+      h('h2', { text: 'Before the last reboot' }),
+      h('p', { class: 'lead', text: reason === 'power-on'
+        ? 'Empty: the camera was powered on (or reset with its button or the programmer), which clears this memory. It keeps the last lines across crashes, watchdogs and software reboots.'
+        : `Empty: nothing was kept from the run that ended by: ${reason}.` }));
+  } else {
     const pre = h('pre', { class: 'log', text: before, hidden: true });
     const toggle = h('button', { class: 'btn medium', type: 'button', text: 'Show log before the last reboot' });
     toggle.addEventListener('click', () => {
