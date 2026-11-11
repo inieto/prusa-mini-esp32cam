@@ -386,7 +386,10 @@ function sdBrowser() {
         box.replaceChildren(h('h2', { text: 'Files' }), h('p', { class: 'lead', text: 'No SD card (FAT32, inserted before power-on or retried every minute).' }));
         return;
       }
+      // Pages of 100 entries: big folders (e.g. an old timelapse) load progressively.
       const listing = await api(`sd/list?path=${encodeURIComponent(path)}`);
+      let entries = listing.entries;
+      let more = listing.more;
       const crumbs = [h('a', { href: '#storage', text: 'card', onclick: (e) => { e.preventDefault(); path = ''; load(); } })];
       let acc = '';
       for (const part of path ? path.split('/') : []) {
@@ -394,25 +397,46 @@ function sdBrowser() {
         const target = acc;
         crumbs.push(' / ', h('a', { href: '#storage', text: part, onclick: (e) => { e.preventDefault(); path = target; load(); } }));
       }
-      const entries = listing.entries.sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
+      const loadMore = h('button', { class: 'btn medium', type: 'button', text: 'Load more', hidden: !more });
+      const tbody = h('tbody');
+      const rows = () => {
+        entries.sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
+        tbody.replaceChildren(...(entries.length ? entries.map((e) => {
+          const full = path ? `${path}/${e.name}` : e.name;
+          const name = e.dir
+            ? h('a', { href: '#storage', text: `${e.name}/`, onclick: (ev) => { ev.preventDefault(); path = full; load(); } })
+            : h('a', { href: fileUrl(full), target: '_blank', rel: 'noopener', text: e.name });
+          return h('tr', {},
+            h('td', {}, name),
+            h('td', { text: e.dir ? '—' : formatBytes(e.size) }),
+            h('td', {}, confirmButton('Delete', 'Confirm', async () => {
+              await action('sd/delete', { path: full }, `Deleted ${e.name}`);
+              load();
+            })));
+        }) : [h('tr', {}, h('td', { text: 'empty' }), h('td'), h('td'))]));
+        loadMore.hidden = !more;
+        loadMore.textContent = `Load more (showing ${entries.length})`;
+      };
+      loadMore.addEventListener('click', async () => {
+        loadMore.disabled = true;
+        try {
+          const next = await api(`sd/list?path=${encodeURIComponent(path)}&offset=${entries.length}`);
+          entries = entries.concat(next.entries);
+          more = next.more;
+          rows();
+        } catch (e) {
+          if (!(e instanceof Unauthorized)) toast(e.message, true);
+        }
+        loadMore.disabled = false;
+      });
+      rows();
       box.replaceChildren(
         h('h2', { text: 'Files' }),
         h('p', { class: 'lead' }, `${formatBytes(sd.free_bytes)} free of ${formatBytes(sd.total_bytes)} · `, ...crumbs),
         h('table', { class: 'data' },
           h('thead', {}, h('tr', {}, ['Name', 'Size', ''].map((t) => h('th', { text: t })))),
-          h('tbody', {}, entries.length ? entries.map((e) => {
-            const full = path ? `${path}/${e.name}` : e.name;
-            const name = e.dir
-              ? h('a', { href: '#storage', text: `${e.name}/`, onclick: (ev) => { ev.preventDefault(); path = full; load(); } })
-              : h('a', { href: fileUrl(full), target: '_blank', rel: 'noopener', text: e.name });
-            return h('tr', {},
-              h('td', {}, name),
-              h('td', { text: e.dir ? '—' : formatBytes(e.size) }),
-              h('td', {}, confirmButton('Delete', 'Confirm', async () => {
-                await action('sd/delete', { path: full }, `Deleted ${e.name}`);
-                load();
-              })));
-          }) : h('tr', {}, h('td', { text: 'empty' }), h('td'), h('td')))),
+          tbody),
+        h('div', { class: 'form-actions' }, loadMore),
         h('p', { class: 'hint', text: 'Make a video from a timelapse folder: ffmpeg -framerate 24 -pattern_type glob -i "*.jpg" timelapse.mp4' }));
     } catch (e) {
       if (!(e instanceof Unauthorized)) box.replaceChildren(h('p', { text: `Error: ${e.message}` }));

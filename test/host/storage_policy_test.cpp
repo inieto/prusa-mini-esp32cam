@@ -87,3 +87,10 @@ TEST(StoragePolicy, DecodesQueryValues) {
   EXPECT_EQ(url_decode("bad%zz"), std::nullopt);
   EXPECT_EQ(url_decode("nul%00"), std::nullopt);
 }
+
+TEST(StoragePolicy, QuotesNamesForJson) {
+  EXPECT_EQ(json_quote("120005.jpg"), "\"120005.jpg\"");
+  EXPECT_EQ(json_quote("a\"b\\c"), "\"a\\\"b\\\\c\"");
+  EXPECT_EQ(json_quote(std::string("x\x01y", 3)), "\"x\\u0001y\"");
+  EXPECT_EQ(json_quote("Bench\xc3\xa9"), "\"Bench\xc3\xa9\"");  // UTF-8 untouched
+}

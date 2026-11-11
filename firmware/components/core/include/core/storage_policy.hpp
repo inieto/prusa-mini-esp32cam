@@ -57,6 +57,10 @@ class TimelapsePolicy {
 // most `keep` remain (oldest first).
 std::vector<std::string> logs_to_delete(std::vector<std::string> names, size_t keep);
 
+// A JSON string literal (with quotes) for arbitrary bytes: used to stream file listings
+// without building a cJSON tree. Control characters become \uXXXX.
+std::string json_quote(std::string_view text);
+
 // Decodes a URL query value (%XX and '+'). Empty on malformed escapes or embedded NUL.
 std::optional<std::string> url_decode(std::string_view encoded);
 

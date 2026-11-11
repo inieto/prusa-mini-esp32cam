@@ -47,7 +47,12 @@ class Storage final : public core::FrameObserver {
 
   SdUsage usage() const;
   // File browser helpers for the HTTP server. Paths are already sanitised and relative.
-  core::Result<std::vector<SdEntry>> list(const std::string& rel) const;
+  // Visits a folder's entries in on-disk order without collecting them: memory stays constant
+  // however many files there are (a v1.1.2 timelapse folder can hold thousands). The visitor
+  // returns false to stop. Uses FATFS directly so each entry already carries its size.
+  using EntryVisitor = bool (*)(void* ctx, std::string_view name, bool dir, uint32_t size);
+  core::Result<void> for_each_entry(const std::string& rel, EntryVisitor visit, void* ctx) const;
+  core::Result<std::vector<SdEntry>> list(const std::string& rel) const;  // small folders only
   core::Result<void> remove(const std::string& rel);  // file, or folder recursively
   static std::string absolute(const std::string& rel) { return std::string(kMount) + "/" + rel; }
 
@@ -67,6 +72,7 @@ class Storage final : public core::FrameObserver {
   TaskHandle_t task_ = nullptr;
   std::atomic<bool> mounted_{false};
   void* card_ = nullptr;  // sdmmc_card_t*, kept opaque to avoid the driver header here
+  uint8_t pdrv_ = 0;      // FATFS drive number of the card ("0:" ...)
 
   mutable std::mutex mutex_;  // guards the fields below
   core::StorageSettings settings_;

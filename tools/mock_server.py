@@ -47,7 +47,9 @@ state = {
     "storage": {"log_to_sd": True, "timelapse": "printing", "timelapse_interval_s": 60},
     "sd": {  # fake card: folders are dicts, files are sizes
         "logs": {"2026-11-08.log": 18_200, "2026-11-09.log": 4_096},
-        "timelapse": {"2026-11-09_1200_Benchy": {"120005.jpg": 61_000, "120105.jpg": 60_500}},
+        "timelapse": {"2026-11-09_1200_Benchy": {"120005.jpg": 61_000, "120105.jpg": 60_500},
+                      # an old v1.1.2 folder with many files, to exercise paging
+                      "photos": {f"photo_{i:04}.jpg": 58_000 + i for i in range(250)}},
     },
     "seq": 1,
     "uploads_ok": 42,
@@ -209,9 +211,13 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "sd/list":
                 if not isinstance(node, dict):
                     return self.send_json({"error": "no such folder"}, HTTPStatus.NOT_FOUND)
-                return self.send_json({"path": "/".join(parts), "entries": [
+                offset = int(query.get("offset", ["0"])[0])
+                items = list(node.items())
+                page = items[offset:offset + 100]
+                return self.send_json({"path": "/".join(parts), "offset": offset,
+                                       "more": offset + 100 < len(items), "entries": [
                     {"name": k, "dir": isinstance(v, dict), "size": 0 if isinstance(v, dict) else v}
-                    for k, v in node.items()]})
+                    for k, v in page]})
             data = SAMPLE.read_bytes() if parts[-1].endswith(".jpg") else b"00:00:01 I mock log\n"
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg" if parts[-1].endswith(".jpg") else "text/plain")

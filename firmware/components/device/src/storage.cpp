@@ -4,6 +4,8 @@
 #include <driver/sdmmc_host.h>
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
+#include <ff.h>  // before diskio_sdmmc.h, which uses its BYTE type
+#include <diskio_sdmmc.h>
 #include <sdmmc_cmd.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -142,6 +144,7 @@ bool Storage::mount() {
     return false;
   }
   card_ = card;
+  pdrv_ = ff_diskio_get_pdrv_card(card);
   mounted_ = true;
   const SdUsage u = usage();
   ESP_LOGI(kTag, "SD card mounted: %s, %llu MB free of %llu MB", card->cid.name,
@@ -255,23 +258,35 @@ SdUsage Storage::usage() const {
   return u;
 }
 
-core::Result<std::vector<SdEntry>> Storage::list(const std::string& rel) const {
+core::Result<void> Storage::for_each_entry(const std::string& rel, EntryVisitor visit,
+                                           void* ctx) const {
   if (!mounted_) return core::fail(core::Errc::Unsupported);
-  const std::string path = rel.empty() ? std::string(kMount) : absolute(rel);
-  DIR* dir = opendir(path.c_str());
-  if (!dir) return core::fail(core::Errc::NotFound);
-  std::vector<SdEntry> out;
-  while (dirent* e = readdir(dir)) {
-    if (out.size() >= kMaxListing) break;
-    SdEntry entry{.name = e->d_name, .dir = e->d_type == DT_DIR};
-    if (entry.name == "." || entry.name == "..") continue;
-    if (!entry.dir) {
-      struct stat st;
-      if (stat((path + "/" + entry.name).c_str(), &st) == 0) entry.size = static_cast<uint32_t>(st.st_size);
+  // FATFS paths are "<drive>:/<path>"; FILINFO carries the size, unlike readdir + stat (which on
+  // FAT rescans the folder for every file: quadratic in big folders).
+  const std::string path = std::to_string(pdrv_) + ":/" + rel;
+  FF_DIR dir;
+  if (f_opendir(&dir, path.c_str()) != FR_OK) return core::fail(core::Errc::NotFound);
+  FILINFO info;
+  while (f_readdir(&dir, &info) == FR_OK && info.fname[0] != '\0') {
+    if (!visit(ctx, info.fname, (info.fattrib & AM_DIR) != 0, static_cast<uint32_t>(info.fsize))) {
+      break;
     }
-    out.push_back(std::move(entry));
   }
-  closedir(dir);
+  f_closedir(&dir);
+  return {};
+}
+
+core::Result<std::vector<SdEntry>> Storage::list(const std::string& rel) const {
+  std::vector<SdEntry> out;
+  auto r = for_each_entry(
+      rel,
+      [](void* ctx, std::string_view name, bool dir, uint32_t size) {
+        auto& v = *static_cast<std::vector<SdEntry>*>(ctx);
+        v.push_back({std::string(name), dir, size});
+        return v.size() < kMaxListing;
+      },
+      &out);
+  if (!r) return std::unexpected(r.error());
   return out;
 }
 

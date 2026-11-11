@@ -829,26 +829,74 @@ esp_err_t WebServer::sd_status(httpd_req_t* req) {
   return send_json(req, "200 OK", print(j.get()));
 }
 
+// Streams one page of a folder listing as JSON while reading the folder. Building the whole
+// list (vector + cJSON tree, all small internal-RAM allocations) exhausted internal RAM on a big
+// timelapse folder: WiFi could not allocate buffers and the connection dropped.
 esp_err_t WebServer::sd_list(httpd_req_t* req) {
   const auto path = path_param(req);
   if (!path) return send_error(req, "400 Bad Request", "invalid path");
-  const auto entries = d_.storage.list(*path);
-  if (!entries) {
-    return entries.error().code == core::Errc::NotFound
-               ? send_error(req, "404 Not Found", "no such folder")
-               : send_error(req, "409 Conflict", "no SD card");
+  size_t offset = 0;
+  {
+    char query[512] = {}, value[12] = {};
+    if (httpd_req_get_url_query_str(req, query, sizeof query) == ESP_OK &&
+        httpd_query_key_value(query, "offset", value, sizeof value) == ESP_OK) {
+      offset = std::strtoul(value, nullptr, 10);
+    }
   }
-  JsonPtr j(cJSON_CreateObject());
-  cJSON_AddStringToObject(j.get(), "path", path->c_str());
-  cJSON* list = cJSON_AddArrayToObject(j.get(), "entries");
-  for (const SdEntry& e : *entries) {
-    cJSON* item = cJSON_CreateObject();
-    cJSON_AddStringToObject(item, "name", e.name.c_str());
-    cJSON_AddBoolToObject(item, "dir", e.dir);
-    cJSON_AddNumberToObject(item, "size", e.size);
-    cJSON_AddItemToArray(list, item);
+  constexpr size_t kPage = 100;
+
+  struct Page {
+    httpd_req_t* req = nullptr;
+    size_t offset = 0, index = 0, sent = 0;
+    bool more = false, failed = false;
+    std::string buf;
+    void flush() {
+      if (!failed && !buf.empty()) {
+        failed = httpd_resp_send_chunk(req, buf.data(), static_cast<ssize_t>(buf.size())) != ESP_OK;
+      }
+      buf.clear();
+    }
+  } page;
+  page.req = req;
+  page.offset = offset;
+  page.buf.reserve(1200);
+
+  const auto visit = [](void* ctx, std::string_view name, bool dir, uint32_t size) {
+    auto& p = *static_cast<Page*>(ctx);
+    if (p.index++ < p.offset) return true;
+    if (p.sent == kPage) {
+      p.more = true;  // at least one entry beyond this page
+      return false;
+    }
+    char tail[48];
+    std::snprintf(tail, sizeof tail, ",\"dir\":%s,\"size\":%lu}", dir ? "true" : "false",
+                  static_cast<unsigned long>(size));
+    p.buf += p.sent++ ? ",{\"name\":" : "{\"name\":";
+    p.buf += core::json_quote(name);
+    p.buf += tail;
+    if (p.buf.size() > 1024) p.flush();
+    return !p.failed;
+  };
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+  page.buf = "{\"path\":" + core::json_quote(*path) + ",\"offset\":" + std::to_string(offset) +
+             ",\"entries\":[";
+  // Nothing is sent until the folder opens, so errors can still be proper JSON responses.
+  struct Probe {
+    static bool first(void*, std::string_view, bool, uint32_t) { return false; }
+  };
+  if (auto r = d_.storage.for_each_entry(*path, Probe::first, nullptr); !r) {
+    return r.error().code == core::Errc::NotFound ? send_error(req, "404 Not Found", "no such folder")
+                                                   : send_error(req, "409 Conflict", "no SD card");
   }
-  return send_json(req, "200 OK", print(j.get()));
+  d_.storage.for_each_entry(*path, visit, &page);
+  if (page.failed) return ESP_FAIL;
+  page.buf += "],\"more\":";
+  page.buf += page.more ? "true}" : "false}";
+  page.flush();
+  if (page.failed) return ESP_FAIL;
+  return httpd_resp_send_chunk(req, nullptr, 0);
 }
 
 esp_err_t WebServer::sd_file(httpd_req_t* req) {

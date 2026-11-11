@@ -114,6 +114,31 @@ std::vector<std::string> logs_to_delete(std::vector<std::string> names, size_t k
   return names;
 }
 
+std::string json_quote(std::string_view text) {
+  std::string out;
+  out.reserve(text.size() + 2);
+  out += '"';
+  for (char c : text) {
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          char esc[8];
+          std::snprintf(esc, sizeof esc, "\\u%04x", static_cast<unsigned char>(c));
+          out += esc;
+        } else {
+          out += c;  // UTF-8 passes through unchanged
+        }
+    }
+  }
+  out += '"';
+  return out;
+}
+
 std::optional<std::string> url_decode(std::string_view in) {
   const auto hex = [](char c) -> int {
     if (c >= '0' && c <= '9') return c - '0';
