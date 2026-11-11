@@ -386,7 +386,9 @@ function sdBrowser() {
         box.replaceChildren(h('h2', { text: 'Files' }), h('p', { class: 'lead', text: 'No SD card (FAT32, inserted before power-on or retried every minute).' }));
         return;
       }
-      // Pages of 100 entries: big folders (e.g. an old timelapse) load progressively.
+      // One page of 100 entries at a time: the DOM stays small however big the folder is.
+      const kPage = 100;
+      let offset = 0;
       const listing = await api(`sd/list?path=${encodeURIComponent(path)}`);
       let entries = listing.entries;
       let more = listing.more;
@@ -397,7 +399,10 @@ function sdBrowser() {
         const target = acc;
         crumbs.push(' / ', h('a', { href: '#storage', text: part, onclick: (e) => { e.preventDefault(); path = target; load(); } }));
       }
-      const loadMore = h('button', { class: 'btn medium', type: 'button', text: 'Load more', hidden: !more });
+      const prev = h('button', { class: 'btn small', type: 'button', text: '◀' });
+      const next = h('button', { class: 'btn small', type: 'button', text: '▶' });
+      const range = h('span', { class: 'lead' });
+      const pager = h('div', { class: 'form-actions', style: 'gap:.5rem;align-items:center' }, prev, range, next);
       const tbody = h('tbody');
       const rows = () => {
         entries.sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
@@ -414,21 +419,25 @@ function sdBrowser() {
               load();
             })));
         }) : [h('tr', {}, h('td', { text: 'empty' }), h('td'), h('td'))]));
-        loadMore.hidden = !more;
-        loadMore.textContent = `Load more (showing ${entries.length})`;
+        pager.hidden = offset === 0 && !more;
+        prev.disabled = offset === 0;
+        next.disabled = !more;
+        range.textContent = entries.length ? `${offset + 1}–${offset + entries.length}` : '';
       };
-      loadMore.addEventListener('click', async () => {
-        loadMore.disabled = true;
+      const go = async (to) => {
+        prev.disabled = next.disabled = true;
         try {
-          const next = await api(`sd/list?path=${encodeURIComponent(path)}&offset=${entries.length}`);
-          entries = entries.concat(next.entries);
-          more = next.more;
-          rows();
+          const page = await api(`sd/list?path=${encodeURIComponent(path)}&offset=${to}`);
+          offset = to;
+          entries = page.entries;
+          more = page.more;
         } catch (e) {
           if (!(e instanceof Unauthorized)) toast(e.message, true);
         }
-        loadMore.disabled = false;
-      });
+        rows();
+      };
+      prev.addEventListener('click', () => go(Math.max(0, offset - kPage)));
+      next.addEventListener('click', () => go(offset + kPage));
       rows();
       box.replaceChildren(
         h('h2', { text: 'Files' }),
@@ -436,7 +445,7 @@ function sdBrowser() {
         h('table', { class: 'data' },
           h('thead', {}, h('tr', {}, ['Name', 'Size', ''].map((t) => h('th', { text: t })))),
           tbody),
-        h('div', { class: 'form-actions' }, loadMore),
+        pager,
         h('p', { class: 'hint', text: 'Make a video from a timelapse folder: ffmpeg -framerate 24 -pattern_type glob -i "*.jpg" timelapse.mp4' }));
     } catch (e) {
       if (!(e instanceof Unauthorized)) box.replaceChildren(h('p', { text: `Error: ${e.message}` }));

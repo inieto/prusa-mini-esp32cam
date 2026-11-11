@@ -24,7 +24,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ### Fixed
 - Opening a big SD folder (e.g. a timelapse folder left by v1.1.2) exhausted internal RAM: WiFi
   could not allocate buffers and the page failed with "Failed to fetch". Listings are now
-  streamed straight from FATFS in pages of 100 (*Load more*), with constant memory. Seen on
+  streamed straight from FATFS in pages of 100 (◀ ▶ pager), with constant memory. Seen on
   hardware.
 - Downloads from the SD card and the crash dump announced no size (they were sent "chunked"),
   so browsers could not show the total or progress: they now carry `Content-Length`.
